@@ -1,11 +1,8 @@
-/* Import da fonte 'Inter' já está no HTML, então não é necessário aqui. */
-
 body {
     font-family: 'Inter', sans-serif;
-    background-color: #f8fafc; /* Cor de fundo slate-50 do Tailwind */
+    background-color: #f8fafc;
 }
 
-/* ===== NOVO: ESTILOS PARA O INDICADOR DE CARREGAMENTO ===== */
 .loading-overlay {
     position: fixed;
     inset: 0;
@@ -20,8 +17,8 @@ body {
 .spinner {
     width: 56px;
     height: 56px;
-    border: 5px solid #e0e7ff; /* indigo-100 */
-    border-bottom-color: #6366f1; /* indigo-500 */
+    border: 5px solid #e0e7ff;
+    border-bottom-color: #6366f1;
     border-radius: 50%;
     display: inline-block;
     box-sizing: border-box;
@@ -29,64 +26,33 @@ body {
 }
 
 @keyframes rotation {
-    0% {
-        transform: rotate(0deg);
-    }
-    100% {
-        transform: rotate(360deg);
-    }
-}
-/* ========================================================== */
-
-/* Animação de fade-in para elementos que aparecem na tela */
-@keyframes fadeIn {
-    from {
-        opacity: 0;
-        transform: translateY(10px);
-    }
-    to {
-        opacity: 1;
-        transform: translateY(0);
-    }
+    0% { transform: rotate(0deg); }
+    100% { transform: rotate(360deg); }
 }
 
-.fade-in {
-    animation: fadeIn 0.5s ease-out forwards;
-}
-
-/* Estilo para o "fantasma" do item sendo arrastado com SortableJS */
 .sortable-ghost {
     opacity: 0.4;
-    background-color: #c7d2fe; /* Cor indigo-200 do Tailwind */
-    border: 2px dashed #6366f1; /* Cor indigo-500 do Tailwind */
+    background-color: #c7d2fe;
+    border: 2px dashed #6366f1;
 }
 
-/* Garante que o item real sendo arrastado mantenha a opacidade total */
-.sortable-drag {
-    opacity: 1 !important;
-}
+.sortable-drag { opacity: 1 !important; }
 
-/* Estilos para os itens na caixa de ferramentas (toolbox) */
 .toolbox-item {
-    cursor: grab; /* Indica que o item é arrastável */
+    cursor: grab;
     transition: all 0.2s ease-in-out;
 }
 
 .toolbox-item:hover {
-    background-color: #e0e7ff; /* Cor indigo-100 do Tailwind */
-    color: #4338ca; /* Cor indigo-700 do Tailwind */
-    transform: scale(1.05); /* Efeito de zoom sutil ao passar o mouse */
+    background-color: #e0e7ff;
+    color: #4338ca;
+    transform: scale(1.05);
 }
+
 .toolbox-item[data-field-type="relationship"] {
     background-color: #eef2ff;
     border-color: #a5b4fc;
 }
 
-/* Utilitário para esconder a barra de rolagem mas manter a rolagem funcional */
-.no-scrollbar::-webkit-scrollbar {
-    display: none; /* Chrome, Safari e Opera */
-}
-.no-scrollbar {
-    -ms-overflow-style: none;  /* IE e Edge */
-    scrollbar-width: none;  /* Firefox */
-}
+.no-scrollbar::-webkit-scrollbar { display: none; }
+.no-scrollbar { -ms-overflow-style: none; scrollbar-width: none; }
