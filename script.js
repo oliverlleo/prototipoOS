@@ -1,6 +1,6 @@
 /*
 ================================================================================
-|| SCRIPT.JS - VERSÃO ROBUSTA E À PROVA DE FALHAS ||
+|| SCRIPT.JS - VERSÃO ROBUSTA E CORRIGIDA ||
 ================================================================================
 Este script foi reestruturado para ser mais resiliente. Ele espera que a página
 inteira carregue (`window.onload`) e trata a biblioteca de ícones (Lucide) como
@@ -110,7 +110,6 @@ async function initApp() {
     const appContainer = document.getElementById('app');
     
     loadingOverlay.style.display = 'none';
-    // CORREÇÃO PRINCIPAL: Altera diretamente o estilo para garantir que a aplicação fica visível.
     appContainer.style.display = 'flex';
     console.log("👍 Aplicação pronta e visível!");
 }
@@ -200,7 +199,8 @@ function setupDragAndDrop() {
         group: 'fields',
         animation: 150,
         onAdd: handleFieldDrop,
-        handle: '[data-lucide="grip-vertical"]',
+        // CORREÇÃO: A linha 'handle' foi removida.
+        // handle: '[data-lucide="grip-vertical"]', // Esta linha estava a causar o problema.
     });
 }
 
@@ -307,6 +307,12 @@ function renderFormField(fieldData) {
         iconEl.setAttribute('data-lucide', fieldInfo.icon);
     } else {
         iconEl.style.display = 'none';
+    }
+    
+    // Adiciona a alça de arrastar apenas se os ícones estiverem disponíveis
+    const handleEl = clone.querySelector('[data-lucide="grip-vertical"]');
+    if (!iconsAvailable) {
+        handleEl.style.display = 'none';
     }
     
     clone.querySelector('.field-label').textContent = fieldData.label + (fieldData.required ? '*' : '');
