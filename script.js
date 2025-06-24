@@ -110,8 +110,8 @@ async function initApp() {
     const appContainer = document.getElementById('app');
     
     loadingOverlay.style.display = 'none';
-    appContainer.classList.remove('hidden');
-    appContainer.classList.add('flex'); // Garante que a classe 'flex' é aplicada
+    // CORREÇÃO PRINCIPAL: Altera diretamente o estilo para garantir que a aplicação fica visível.
+    appContainer.style.display = 'flex';
     console.log("👍 Aplicação pronta e visível!");
 }
 
