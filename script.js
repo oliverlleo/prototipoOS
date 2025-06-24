@@ -120,21 +120,47 @@ async function startApp() {
 }
 
 
-// ==== PONTO DE ENTRADA DA APLICAÇÃO ====
+// ==== PONTO DE ENTRADA DA APLICAÇÃO (CORRIGIDO) ====
 
-// Espera que o conteúdo do HTML esteja pronto
+/**
+ * Espera que o DOM esteja pronto e depois verifica se as dependências (Lucide) estão carregadas
+ * antes de iniciar a aplicação.
+ */
 document.addEventListener('DOMContentLoaded', () => {
-    // Verifica repetidamente se a biblioteca 'lucide' já foi carregada
-    const checkLucide = setInterval(() => {
-        if (typeof lucide !== 'undefined') {
-            clearInterval(checkLucide); // Para a verificação
-            console.log("✨ Biblioteca Lucide carregada. A iniciar a aplicação.");
+    waitForDependenciesAndStart();
+});
+
+/**
+ * Verifica repetidamente se as dependências externas, como a biblioteca de ícones,
+ * estão prontas para serem usadas.
+ */
+function waitForDependenciesAndStart() {
+    const maxRetries = 50; // Tenta por 5 segundos (50 * 100ms)
+    let retries = 0;
+
+    const check = setInterval(() => {
+        // Verificação mais robusta: garante que 'lucide' existe e tem o método 'createIcons'.
+        if (typeof lucide !== 'undefined' && lucide && typeof lucide.createIcons === 'function') {
+            clearInterval(check); // Para a verificação
+            console.log("✨ Biblioteca Lucide carregada e pronta. A iniciar a aplicação.");
             startApp(); // Inicia a aplicação principal
         } else {
-            console.log("⌛ A aguardar pela biblioteca de ícones (Lucide)...");
+            retries++;
+            if (retries > maxRetries) {
+                // Se exceder o tempo limite, para a verificação e informa o utilizador.
+                clearInterval(check);
+                console.error("❌ A biblioteca de ícones (Lucide) não conseguiu carregar após 5 segundos. A aplicação não pode continuar.");
+                Swal.fire({
+                    icon: 'error',
+                    title: 'Erro de Carregamento',
+                    text: 'Não foi possível carregar a biblioteca de ícones. Verifique a sua ligação à internet e a consola (F12) para erros de rede.',
+                });
+            } else {
+                console.log(`⌛ A aguardar pela biblioteca de ícones (Lucide)... Tentativa ${retries}/${maxRetries}`);
+            }
         }
     }, 100); // Verifica a cada 100 milissegundos
-});
+}
 
 
 function populateEntityLibrary() {
