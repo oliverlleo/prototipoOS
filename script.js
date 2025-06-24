@@ -1,19 +1,18 @@
 /*
 ================================================================================
-|| SCRIPT.JS - VERSÃO ROBUSTA E CORRIGIDA ||
+|| SCRIPT.JS - VERSÃO COM CRIAÇÃO DE ENTIDADES DINÂMICAS ||
 ================================================================================
-Este script foi reestruturado para ser mais resiliente. Ele espera que a página
-inteira carregue (`window.onload`) e trata a biblioteca de ícones (Lucide) como
-opcional. Se os ícones não carregarem, a aplicação arranca na mesma, garantindo
-que a funcionalidade principal nunca é bloqueada.
+Este script foi reestruturado para permitir a criação de entidades pelo
+utilizador. As entidades personalizadas são guardadas no Firebase e carregadas
+ao iniciar a aplicação, tornando o sistema verdadeiramente modular.
 ================================================================================
 */
 
 // Importações do Firebase SDK
 import { initializeApp } from "https://www.gstatic.com/firebasejs/9.15.0/firebase-app.js";
-import { getDatabase, ref, set, get } from "https://www.gstatic.com/firebasejs/9.15.0/firebase-database.js";
+import { getDatabase, ref, set, get, push, remove } from "https://www.gstatic.com/firebasejs/9.15.0/firebase-database.js";
 
-// Configuração do Firebase fornecida pelo usuário
+// Configuração do Firebase
 const firebaseConfig = {
     apiKey: "AIzaSyAtuwWlErlNOW_c5BlBE_ktwSSmHGLjN2c",
     authDomain: "prototipoos.firebaseapp.com",
@@ -27,15 +26,17 @@ const firebaseConfig = {
 
 // Variáveis globais
 let db;
-let iconsAvailable = false; // Flag para controlar se os ícones estão disponíveis
+let iconsAvailable = false;
 
 // ==== DADOS DE CONFIGURAÇÃO INICIAL ====
-const initialEntities = [
-    { id: 'cliente', name: 'Cliente', icon: 'user-round' },
-    { id: 'proposta', name: 'Proposta', icon: 'file-text' },
-    { id: 'produto', name: 'Produto', icon: 'package' },
-    { id: 'chamado', name: 'Chamado', icon: 'phone' },
+const predefinedEntities = [
+    { id: 'cliente', name: 'Cliente', icon: 'user-round', predefined: true },
+    { id: 'proposta', name: 'Proposta', icon: 'file-text', predefined: true },
+    { id: 'produto', name: 'Produto', icon: 'package', predefined: true },
+    { id: 'chamado', name: 'Chamado', icon: 'phone', predefined: true },
 ];
+
+const availableIcons = ['building', 'truck', 'dollar-sign', 'tag', 'shopping-cart', 'receipt', 'landmark', 'briefcase'];
 
 const fieldTypes = [
     { type: 'text', name: 'Texto Curto', icon: 'type' },
@@ -49,74 +50,37 @@ const fieldTypes = [
 ];
 
 // ==== PONTO DE ENTRADA DA APLICAÇÃO ====
-
-/**
- * A função `initApp` é o coração da aplicação.
- * É chamada pelo evento `window.onload`, garantindo que todo o HTML, CSS, imagens e
- * scripts externos estejam completamente carregados.
- */
 async function initApp() {
     console.log("🚀 A aplicação está a iniciar...");
-
-    // 1. Verifica se a biblioteca de ícones carregou
     if (typeof lucide !== 'undefined' && lucide) {
         iconsAvailable = true;
-        console.log("✨ Ícones (Lucide) disponíveis.");
-    } else {
-        console.warn("⚠️ A biblioteca de ícones (Lucide) não carregou. A aplicação continuará sem ícones.");
     }
-
-    // 2. Inicializa o Firebase
     try {
         const appFirebase = initializeApp(firebaseConfig);
         db = getDatabase(appFirebase);
-        console.log("✅ Firebase inicializado com sucesso.");
+        console.log("✅ Firebase inicializado.");
     } catch (error) {
         console.error("❌ ERRO CRÍTICO AO INICIALIZAR O FIREBASE:", error);
         document.getElementById('loading-overlay').innerHTML = 'Erro ao ligar à base de dados.';
-        return; // Para a execução se o Firebase falhar
-    }
-
-    // 3. Inicializa a UI
-    if (iconsAvailable) {
-        lucide.createIcons();
+        return;
     }
     
-    populateEntityLibrary();
+    await loadAllEntities();
+    
     populateFieldsToolbox();
-    console.log("📚 Bibliotecas populadas.");
-
     setupDragAndDrop();
-    console.log("🛠️ Funcionalidade de arrastar e soltar configurada.");
-
     setupEventListeners();
-    console.log("🎧 Listeners de eventos configurados.");
     
-    // 4. Carrega os dados guardados do Firebase
-    try {
-        await loadStateFromFirebase();
-        console.log("✅ Estado carregado com sucesso do Firebase!");
-    } catch (error) {
-        console.error("❌ Erro ao carregar o estado do Firebase:", error);
-        Swal.fire({
-            icon: 'error',
-            title: 'Erro ao Carregar Dados',
-            text: 'Não foi possível carregar as configurações guardadas. Verifique as regras de segurança do seu Firebase e a consola (F12) para mais detalhes.',
-        });
-    }
+    await loadModuleStateFromFirebase();
 
-    // 5. Mostra a aplicação e esconde o carregamento
     const loadingOverlay = document.getElementById('loading-overlay');
     const appContainer = document.getElementById('app');
-    
     loadingOverlay.style.display = 'none';
     appContainer.style.display = 'flex';
-    console.log("👍 Aplicação pronta e visível!");
+    console.log("👍 Aplicação pronta.");
 }
 
-// Atribui a função initApp ao evento `window.onload`
 window.onload = initApp;
-
 
 // ---- Funções de Suporte ----
 
@@ -126,28 +90,59 @@ function tryCreateIcons() {
     }
 }
 
-function populateEntityLibrary() {
+/**
+ * Renderiza um único cartão de entidade na biblioteca da esquerda.
+ * @param {object} entity - O objeto da entidade a ser renderizada.
+ */
+function renderEntityInLibrary(entity) {
     const list = document.getElementById('entity-list');
     const template = document.getElementById('entity-card-template');
-    list.innerHTML = '';
-    initialEntities.forEach(entity => {
-        const clone = template.content.cloneNode(true);
-        const card = clone.querySelector('.entity-card');
-        card.dataset.entityId = entity.id;
-        card.dataset.entityName = entity.name;
-        
-        const iconEl = clone.querySelector('.entity-icon');
-        if (iconsAvailable) {
-            iconEl.setAttribute('data-lucide', entity.icon);
-        } else {
-            iconEl.style.display = 'none'; // Esconde o elemento do ícone
-        }
+    const clone = template.content.cloneNode(true);
+    const card = clone.querySelector('.entity-card');
 
-        clone.querySelector('.entity-name').textContent = entity.name;
-        list.appendChild(clone);
-    });
+    card.dataset.entityId = entity.id;
+    card.dataset.entityName = entity.name;
+    
+    const iconEl = clone.querySelector('.entity-icon');
+    if (iconsAvailable) {
+        iconEl.setAttribute('data-lucide', entity.icon);
+    } else {
+        iconEl.style.display = 'none';
+    }
+
+    clone.querySelector('.entity-name').textContent = entity.name;
+    
+    // Mostra o botão de eliminar apenas para entidades personalizadas
+    if (!entity.predefined) {
+        const deleteBtn = clone.querySelector('.delete-custom-entity-btn');
+        deleteBtn.classList.remove('hidden');
+    }
+    
+    list.appendChild(clone);
     tryCreateIcons();
 }
+
+/**
+ * Carrega tanto as entidades predefinidas como as personalizadas guardadas no Firebase.
+ */
+async function loadAllEntities() {
+    console.log("📚 A carregar todas as entidades...");
+    document.getElementById('entity-list').innerHTML = ''; // Limpa a lista
+    
+    // Renderiza as entidades predefinidas
+    predefinedEntities.forEach(renderEntityInLibrary);
+    
+    // Carrega e renderiza as entidades personalizadas
+    const customEntitiesRef = ref(db, 'custom_entities');
+    const snapshot = await get(customEntitiesRef);
+    if (snapshot.exists()) {
+        const customEntities = snapshot.val();
+        for (const entityId in customEntities) {
+            renderEntityInLibrary({ ...customEntities[entityId], id: entityId });
+        }
+    }
+}
+
 
 function populateFieldsToolbox() {
     const toolbox = document.getElementById('fields-toolbox');
@@ -199,8 +194,7 @@ function setupDragAndDrop() {
         group: 'fields',
         animation: 150,
         onAdd: handleFieldDrop,
-        // CORREÇÃO: O 'handle' foi reintroduzido para permitir a reordenação dos campos existentes.
-        handle: '[data-lucide="grip-vertical"]', 
+        handle: '[data-lucide="grip-vertical"]',
     });
 }
 
@@ -213,29 +207,23 @@ function handleEntityDrop(event) {
 
     if (moduleEl.querySelector(`.dropped-entity-card[data-entity-id="${entityId}"]`)) {
         item.remove();
-        Swal.fire({
-            icon: 'warning',
-            title: 'Entidade já existe!',
-            text: `A entidade '${entityName}' já foi adicionada a este módulo.`,
-            timer: 2000,
-            showConfirmButton: false
-        });
+        Swal.fire({ icon: 'warning', title: 'Entidade já existe!', text: `A entidade '${entityName}' já foi adicionada a este módulo.`, timer: 2000, showConfirmButton: false });
         return;
     }
     
     const template = document.getElementById('dropped-entity-card-template');
     const clone = template.content.cloneNode(true);
     const card = clone.querySelector('.dropped-entity-card');
-    
     card.dataset.entityId = entityId;
     card.dataset.entityName = entityName;
     card.dataset.moduleId = moduleId;
     
-    const entityInfo = initialEntities.find(e => e.id === entityId);
+    const allEntities = [...predefinedEntities, ...Object.values(document.querySelectorAll('#entity-list .entity-card')).map(c => c.dataset)];
+    const entityInfo = allEntities.find(e => e.id === entityId);
     
     const iconEl = clone.querySelector('.entity-icon');
-    if (iconsAvailable) {
-       iconEl.setAttribute('data-lucide', entityInfo.icon);
+    if (iconsAvailable && entityInfo) {
+       iconEl.setAttribute('data-lucide', entityInfo.icon || 'box');
     } else {
        iconEl.style.display = 'none';
     }
@@ -282,11 +270,7 @@ async function handleFieldDrop(event) {
     });
 
     if (isConfirmed && formValues) {
-        const fieldData = {
-            id: `field_${Date.now()}`,
-            type: fieldType,
-            ...formValues
-        };
+        const fieldData = { id: `field_${Date.now()}`, type: fieldType, ...formValues };
         renderFormField(fieldData);
     }
 }
@@ -295,29 +279,16 @@ function renderFormField(fieldData) {
     const dropzone = document.getElementById('form-builder-dropzone');
     const template = document.getElementById('form-field-template');
     const clone = template.content.cloneNode(true);
-
     const card = clone.querySelector('.form-field-card');
     card.dataset.fieldId = fieldData.id;
     card.dataset.fieldData = JSON.stringify(fieldData);
-
     const fieldInfo = fieldTypes.find(f => f.type === fieldData.type);
-    
     const iconEl = clone.querySelector('.field-icon');
-    if (iconsAvailable) {
-        iconEl.setAttribute('data-lucide', fieldInfo.icon);
-    } else {
-        iconEl.style.display = 'none';
-    }
-    
-    // Adiciona a alça de arrastar apenas se os ícones estiverem disponíveis
+    if (iconsAvailable) { iconEl.setAttribute('data-lucide', fieldInfo.icon); } else { iconEl.style.display = 'none'; }
     const handleEl = clone.querySelector('[data-lucide="grip-vertical"]');
-    if (!iconsAvailable) {
-        handleEl.style.display = 'none';
-    }
-    
+    if (!iconsAvailable) { handleEl.style.display = 'none'; }
     clone.querySelector('.field-label').textContent = fieldData.label + (fieldData.required ? '*' : '');
     clone.querySelector('.field-type').textContent = fieldInfo.name;
-
     dropzone.appendChild(clone);
     tryCreateIcons();
 }
@@ -326,13 +297,11 @@ function openModal(entityCard) {
     const modal = document.getElementById('entity-builder-modal');
     const modalContent = modal.querySelector('.bg-white');
     const title = document.getElementById('modal-title');
-    
     const entityId = entityCard.dataset.entityId;
     const entityName = entityCard.dataset.entityName;
     const moduleId = entityCard.dataset.moduleId;
 
     title.textContent = `Editando a Entidade: ${entityName}`;
-    
     modal.dataset.currentModuleId = moduleId;
     modal.dataset.currentEntityId = entityId;
     modal.dataset.currentEntityName = entityName;
@@ -341,154 +310,171 @@ function openModal(entityCard) {
     loadStructureForEntity(moduleId, entityId);
 
     modal.classList.remove('hidden');
-    setTimeout(() => {
-        modalContent.classList.remove('scale-95', 'opacity-0');
-    }, 10);
+    setTimeout(() => { modalContent.classList.remove('scale-95', 'opacity-0'); }, 10);
 }
 
 function closeModal() {
     const modal = document.getElementById('entity-builder-modal');
     const modalContent = modal.querySelector('.bg-white');
     modalContent.classList.add('scale-95', 'opacity-0');
-    setTimeout(() => {
-        modal.classList.add('hidden');
-    }, 300);
+    setTimeout(() => { modal.classList.add('hidden'); }, 300);
 }
 
 function setupEventListeners() {
     document.body.addEventListener('click', e => {
         const configureBtn = e.target.closest('.configure-btn');
-        if (configureBtn) {
-            const card = configureBtn.closest('.dropped-entity-card');
-            openModal(card);
-        }
+        if (configureBtn) { openModal(configureBtn.closest('.dropped-entity-card')); }
 
-        // NOVO: Listener para o botão de eliminar entidade
         const deleteEntityBtn = e.target.closest('.delete-entity-btn');
         if (deleteEntityBtn) {
             const card = deleteEntityBtn.closest('.dropped-entity-card');
-            const entityName = card.dataset.entityName;
-            const moduleId = card.dataset.moduleId;
-            const entityId = card.dataset.entityId;
+            confirmAndRemoveEntityFromModule(card);
+        }
 
-            Swal.fire({
-                title: `Tem a certeza?`,
-                text: `Deseja remover a entidade '${entityName}' deste módulo? Esta ação não pode ser revertida.`,
-                icon: 'warning',
-                showCancelButton: true,
-                confirmButtonColor: '#d33',
-                cancelButtonColor: '#3085d6',
-                confirmButtonText: 'Sim, remover!',
-                cancelButtonText: 'Cancelar'
-            }).then((result) => {
-                if (result.isConfirmed) {
-                    card.remove();
-                    deleteEntityFromModule(moduleId, entityId);
-                    Swal.fire('Removido!', `A entidade '${entityName}' foi removida.`, 'success');
-                }
-            });
+        const deleteCustomEntityBtn = e.target.closest('.delete-custom-entity-btn');
+        if (deleteCustomEntityBtn) {
+            const card = deleteCustomEntityBtn.closest('.entity-card');
+            confirmAndRemoveCustomEntity(card);
         }
     });
     
+    document.getElementById('add-new-entity-btn').addEventListener('click', handleAddNewEntity);
     document.getElementById('close-modal-btn').addEventListener('click', closeModal);
     document.getElementById('save-structure-btn').addEventListener('click', saveCurrentStructure);
 
     document.getElementById('form-builder-dropzone').addEventListener('click', e => {
          const deleteBtn = e.target.closest('.delete-field-btn');
          if (deleteBtn) {
-            Swal.fire({
-                title: 'Tem certeza?',
-                text: "Não poderá reverter esta ação!",
-                icon: 'warning',
-                showCancelButton: true,
-                confirmButtonColor: '#d33',
-                cancelButtonColor: '#3085d6',
-                confirmButtonText: 'Sim, eliminar!',
-                cancelButtonText: 'Cancelar'
-            }).then((result) => {
-                if (result.isConfirmed) {
-                    deleteBtn.closest('.form-field-card').remove();
-                    Swal.fire('Eliminado!', 'O campo foi removido.', 'success');
-                }
+            Swal.fire({ title: 'Tem certeza?', text: "Não poderá reverter esta ação!", icon: 'warning', showCancelButton: true, confirmButtonColor: '#d33', cancelButtonColor: '#3085d6', confirmButtonText: 'Sim, eliminar!', cancelButtonText: 'Cancelar' }).then((result) => {
+                if (result.isConfirmed) { deleteBtn.closest('.form-field-card').remove(); Swal.fire('Eliminado!', 'O campo foi removido.', 'success'); }
             });
-         }
-         
-         const editBtn = e.target.closest('.edit-field-btn');
-         if(editBtn) {
-            alert('Função de edição a ser implementada!');
          }
     });
 }
 
-// ==== INTERAÇÃO COM FIREBASE REALTIME DATABASE ====
+// ==== NOVAS FUNÇÕES PARA CRIAR ENTIDADES ====
+
+async function handleAddNewEntity() {
+    const iconHtml = availableIcons.map(icon => 
+        `<button class="icon-picker-btn p-2 rounded-md hover:bg-indigo-100" data-icon="${icon}">
+            <i data-lucide="${icon}"></i>
+        </button>`
+    ).join('');
+
+    const { value: formValues, isConfirmed } = await Swal.fire({
+        title: 'Criar Nova Entidade',
+        html: `
+            <input id="swal-input-name" class="swal2-input" placeholder="Nome da Entidade (ex: Fornecedor)">
+            <p class="text-sm mt-4 mb-2">Escolha um ícone:</p>
+            <div id="swal-icon-grid" class="grid grid-cols-8 gap-2">${iconHtml}</div>
+        `,
+        focusConfirm: false,
+        didOpen: () => {
+            tryCreateIcons();
+            document.getElementById('swal-icon-grid').addEventListener('click', e => {
+                const button = e.target.closest('.icon-picker-btn');
+                if (button) {
+                    document.querySelectorAll('.icon-picker-btn').forEach(btn => btn.classList.remove('bg-indigo-200'));
+                    button.classList.add('bg-indigo-200');
+                }
+            });
+        },
+        preConfirm: () => {
+            const name = document.getElementById('swal-input-name').value;
+            const selectedIconEl = document.querySelector('.icon-picker-btn.bg-indigo-200');
+            if (!name) { Swal.showValidationMessage('O nome da entidade é obrigatório.'); return false; }
+            if (!selectedIconEl) { Swal.showValidationMessage('Por favor, escolha um ícone.'); return false; }
+            return { name, icon: selectedIconEl.dataset.icon };
+        }
+    });
+
+    if (isConfirmed && formValues) {
+        const customEntitiesRef = ref(db, 'custom_entities');
+        const newEntityRef = push(customEntitiesRef); // Gera um ID único
+        
+        const newEntityData = {
+            name: formValues.name,
+            icon: formValues.icon,
+            predefined: false
+        };
+        
+        await set(newEntityRef, newEntityData);
+        renderEntityInLibrary({ ...newEntityData, id: newEntityRef.key });
+        Swal.fire('Criado!', 'A sua nova entidade está pronta para ser usada.', 'success');
+    }
+}
+
+function confirmAndRemoveEntityFromModule(card) {
+    const entityName = card.dataset.entityName;
+    Swal.fire({ title: `Remover '${entityName}'?`, text: `Tem a certeza que deseja remover esta entidade do módulo?`, icon: 'warning', showCancelButton: true, confirmButtonColor: '#d33', cancelButtonColor: '#3085d6', confirmButtonText: 'Sim, remover!', cancelButtonText: 'Cancelar' }).then((result) => {
+        if (result.isConfirmed) {
+            card.remove();
+            deleteEntityFromModule(card.dataset.moduleId, card.dataset.entityId);
+        }
+    });
+}
+
+function confirmAndRemoveCustomEntity(card) {
+    const entityId = card.dataset.entityId;
+    const entityName = card.dataset.entityName;
+    Swal.fire({ title: `Eliminar Entidade '${entityName}'?`, text: `Esta ação irá remover a entidade da biblioteca e de todos os módulos onde foi usada. Esta ação é PERMANENTE.`, icon: 'error', showCancelButton: true, confirmButtonColor: '#d33', cancelButtonColor: '#3085d6', confirmButtonText: 'Sim, eliminar para sempre!', cancelButtonText: 'Cancelar' }).then(async (result) => {
+        if (result.isConfirmed) {
+            // Remove da base de dados de entidades personalizadas
+            await remove(ref(db, `custom_entities/${entityId}`));
+            // Remove de todos os módulos onde possa ter sido usada
+            const schemasRef = ref(db, 'schemas');
+            const snapshot = await get(schemasRef);
+            if (snapshot.exists()) {
+                const updates = {};
+                for (const moduleId in snapshot.val()) {
+                    updates[`/schemas/${moduleId}/${entityId}`] = null;
+                }
+                await set(ref(db), { ...snapshot.val(), ...updates });
+            }
+            // Remove da UI
+            card.remove();
+            document.querySelectorAll(`.dropped-entity-card[data-entity-id="${entityId}"]`).forEach(c => c.remove());
+            Swal.fire('Eliminado!', `A entidade '${entityName}' foi eliminada permanentemente.`, 'success');
+        }
+    });
+}
+
+
+// ==== INTERAÇÃO COM FIREBASE ====
+
+async function deleteEntityFromModule(moduleId, entityId) {
+    const path = `schemas/${moduleId}/${entityId}`;
+    await set(ref(db, path), null);
+    console.log(`✅ Entidade '${entityId}' removida do módulo '${moduleId}'.`);
+}
 
 async function saveEntityToModule(moduleId, entityId, entityName) {
     const path = `schemas/${moduleId}/${entityId}`;
     const dbRef = ref(db, path);
     const snapshot = await get(dbRef);
     if (!snapshot.exists()) {
-        await set(dbRef, {
-            entityName: entityName,
-            attributes: []
-        });
-    }
-}
-
-/**
- * NOVO: Remove uma entidade inteira do Firebase.
- * @param {string} moduleId - O ID do módulo.
- * @param {string} entityId - O ID da entidade a ser removida.
- */
-async function deleteEntityFromModule(moduleId, entityId) {
-    const path = `schemas/${moduleId}/${entityId}`;
-    const dbRef = ref(db, path);
-    try {
-        await set(dbRef, null); // Definir o valor como null remove o nó no Realtime Database
-        console.log(`✅ Entidade '${entityId}' removida com sucesso do módulo '${moduleId}'.`);
-    } catch (error) {
-        console.error(`❌ Erro ao remover a entidade '${entityId}':`, error);
-        Swal.fire('Erro', 'Ocorreu um problema ao remover a entidade da base de dados.', 'error');
+        await set(dbRef, { entityName, attributes: [] });
     }
 }
 
 function saveCurrentStructure() {
     const modal = document.getElementById('entity-builder-modal');
-    const moduleId = modal.dataset.currentModuleId;
-    const entityId = modal.dataset.currentEntityId;
-    const entityName = modal.dataset.currentEntityName;
-
+    const { currentModuleId, currentEntityId, currentEntityName } = modal.dataset;
     const formBuilder = document.getElementById('form-builder-dropzone');
     const fieldCards = formBuilder.querySelectorAll('.form-field-card');
-
-    const attributes = Array.from(fieldCards).map(card => {
-        return JSON.parse(card.dataset.fieldData);
+    const attributes = Array.from(fieldCards).map(card => JSON.parse(card.dataset.fieldData));
+    const schema = { entityName: currentEntityName, attributes };
+    const dbRef = ref(db, `schemas/${currentModuleId}/${currentEntityId}`);
+    set(dbRef).then(() => {
+        Swal.fire({ icon: 'success', title: 'Guardado!', text: `A estrutura da entidade '${currentEntityName}' foi guardada.`, timer: 2000, showConfirmButton: false });
+        closeModal();
+    }).catch(error => {
+        console.error("❌ Erro ao guardar no Firebase:", error);
+        Swal.fire({ icon: 'error', title: 'Oops...', text: 'Algo correu mal ao guardar a estrutura!' });
     });
-
-    const schema = { entityName, attributes };
-    const dbRef = ref(db, `schemas/${moduleId}/${entityId}`);
-    
-    set(dbRef, schema)
-        .then(() => {
-            Swal.fire({
-                icon: 'success',
-                title: 'Guardado com sucesso!',
-                text: `A estrutura da entidade '${entityName}' foi guardada.`,
-                timer: 2000,
-                showConfirmButton: false
-            });
-            closeModal();
-        })
-        .catch(error => {
-            console.error("❌ Erro ao guardar no Firebase:", error);
-            Swal.fire({
-                icon: 'error',
-                title: 'Oops...',
-                text: 'Algo correu mal ao guardar a estrutura! Verifique a consola (F12).'
-            });
-        });
 }
 
-async function loadStateFromFirebase() {
+async function loadModuleStateFromFirebase() {
      const schemasRef = ref(db, 'schemas');
      const snapshot = await get(schemasRef);
      if (snapshot.exists()) {
@@ -498,28 +484,27 @@ async function loadStateFromFirebase() {
             if(moduleEl) {
                 const dropzone = moduleEl.querySelector('.entities-dropzone');
                 for(const entityId in schemas[moduleId]) {
+                    if (!schemas[moduleId][entityId]) continue; // Skip if null (deleted)
                     const entityData = schemas[moduleId][entityId];
-                    
                     const template = document.getElementById('dropped-entity-card-template');
                     const clone = template.content.cloneNode(true);
                     const card = clone.querySelector('.dropped-entity-card');
-                    
                     card.dataset.entityId = entityId;
                     card.dataset.entityName = entityData.entityName;
                     card.dataset.moduleId = moduleId;
                     
-                    const entityInfo = initialEntities.find(e => e.id === entityId);
+                    const allEntities = [...predefinedEntities, ...Object.values(document.querySelectorAll('#entity-list .entity-card')).map(c => ({...c.dataset, icon: 'box'}))];
+                    const entityInfo = allEntities.find(e => e.id === entityId);
                     
                     const iconEl = clone.querySelector('.entity-icon');
                     if (iconsAvailable && entityInfo) {
-                       iconEl.setAttribute('data-lucide', entityInfo.icon);
+                       iconEl.setAttribute('data-lucide', entityInfo.icon || 'box');
                     } else {
                        iconEl.style.display = 'none';
                     }
 
                     clone.querySelector('.entity-name').textContent = entityData.entityName;
                     card.classList.remove('animate-pulse');
-
                     dropzone.appendChild(clone);
                 }
             }
@@ -532,7 +517,6 @@ async function loadStructureForEntity(moduleId, entityId) {
     const path = `schemas/${moduleId}/${entityId}`;
     const dbRef = ref(db, path);
     const snapshot = await get(dbRef);
-
     if (snapshot.exists()) {
         const schema = snapshot.val();
         if (schema.attributes && schema.attributes.length > 0) {
