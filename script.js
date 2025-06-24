@@ -483,7 +483,6 @@ async function saveCurrentStructure() {
     try {
         await db.ref(`schemas/${currentModuleId}/${currentEntityId}`).set(schema);
         await Swal.fire({ icon: 'success', title: 'Guardado!', text: `A estrutura da entidade '${currentEntityName}' foi guardada.`, timer: 2000, showConfirmButton: false });
-        
     } catch (error) {
         Swal.fire({ icon: 'error', title: 'Oops...', text: 'Algo correu mal ao guardar a estrutura!' });
     }
