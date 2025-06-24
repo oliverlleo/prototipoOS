@@ -1,46 +1,27 @@
 /*
 ================================================================================
-|| INSTRUÇÕES IMPORTANTES PARA O CÓDIGO FUNCIONAR ||
+|| INSTRUÇÕES DE DIAGNÓSTICO ||
 ================================================================================
 
-Olá! Se a aplicação não está a funcionar, provavelmente é por um dos dois motivos abaixo. Por favor, leia com atenção:
+Olá! Se o construtor ainda não funciona, estes passos ajudar-nos-ão a descobrir porquê.
 
---------------------------------------------------------------------------------
-1. NECESSIDADE DE UM SERVIDOR WEB LOCAL
---------------------------------------------------------------------------------
-Este projeto usa Módulos JavaScript (`import`). Por razões de segurança (CORS), os navegadores não permitem que ficheiros HTML que usam módulos carreguem outros ficheiros quando abertos diretamente do seu computador (usando o caminho `file:///...`).
+O passo mais importante é verificar a "Consola do Desenvolvedor" do seu navegador.
 
-**SOLUÇÃO:** Você precisa de servir os ficheiros através de um servidor web local. É muito simples:
-  - Se usa o Visual Studio Code:
-    1. Instale a extensão "Live Server".
-    2. Clique com o botão direito no seu ficheiro `index.html`.
-    3. Selecione "Open with Live Server".
-    4. Isto abrirá o projeto no seu navegador com um endereço como `http://127.0.0.1:5500`, e tudo deverá funcionar.
+COMO ABRIR A CONSOLA:
+  - No Chrome, Firefox ou Edge: Pressione a tecla F12 e clique na aba "Consola".
+  - No Safari: Vá a Preferências > Avançado e ative "Mostrar menu Desenvolver na barra de menus". Depois, pode usar o atalho Option + ⌘ + C.
 
-  - Se não usa o VS Code, pode usar o Python (se o tiver instalado):
-    1. Abra o terminal na pasta do seu projeto.
-    2. Execute o comando: `python -m http.server`
-    3. Abra o seu navegador e aceda a `http://localhost:8000`.
+O QUE PROCURAR NA CONSOLA:
+  1. Procure por mensagens a vermelho (erros). Elas dir-nos-ão exatamente o que está a falhar.
+  2. Veja se as minhas mensagens de diagnóstico aparecem. Você deverá ver algo como:
+     - "Firebase inicializado com sucesso."
+     - "A configurar a funcionalidade de arrastar e soltar..."
+     - "A carregar o estado do Firebase..."
+     - "Estado carregado com sucesso!" ou "Erro ao carregar o estado do Firebase: ..."
 
---------------------------------------------------------------------------------
-2. REGRAS DE SEGURANÇA DO FIREBASE REALTIME DATABASE
---------------------------------------------------------------------------------
-Por defeito, o Firebase não permite que qualquer pessoa leia ou escreva no seu banco de dados. Para um protótipo como este, precisamos de tornar as regras públicas.
+Se vir um erro, ele geralmente indica o problema (ex: problema com as regras do Firebase, falha de rede, etc.).
+Lembre-se que continua a ser essencial usar um servidor local (como a extensão "Live Server") e ter as regras do Firebase como públicas.
 
-**SOLUÇÃO:**
-  1. Vá ao seu projeto na consola do Firebase (https://console.firebase.google.com/).
-  2. No menu à esquerda, vá a "Realtime Database".
-  3. No topo, clique na aba "Regras" (Rules).
-  4. Substitua o conteúdo existente por isto:
-     {
-       "rules": {
-         ".read": true,
-         ".write": true
-       }
-     }
-  5. Clique em "Publicar". As alterações podem levar alguns segundos a propagar-se.
-
-Após seguir estes dois passos, a aplicação deverá funcionar como esperado.
 ================================================================================
 */
 
@@ -60,9 +41,21 @@ const firebaseConfig = {
     measurementId: "G-85EK8CECR5"
 };
 
-// Inicializa o Firebase
-const app = initializeApp(firebaseConfig);
-const db = getDatabase(app);
+// ==== INICIALIZAÇÃO E DIAGNÓSTICO ====
+let db;
+try {
+    const app = initializeApp(firebaseConfig);
+    db = getDatabase(app);
+    console.log("✅ Firebase inicializado com sucesso.");
+} catch (error) {
+    console.error("❌ ERRO CRÍTICO AO INICIALIZAR O FIREBASE:", error);
+    Swal.fire({
+        icon: 'error',
+        title: 'Erro de Conexão com o Firebase',
+        text: 'Não foi possível ligar à base de dados. Verifique a consola (F12) para mais detalhes.',
+    });
+}
+
 
 // ==== DADOS DE CONFIGURAÇÃO INICIAL ====
 
@@ -86,7 +79,12 @@ const fieldTypes = [
 
 // ==== INICIALIZAÇÃO DA UI ====
 
-document.addEventListener('DOMContentLoaded', () => {
+document.addEventListener('DOMContentLoaded', async () => {
+    if (!db) {
+        console.error("A base de dados não foi inicializada. A aplicação não pode continuar.");
+        return;
+    }
+    
     // Ativa os ícones do Lucide
     lucide.createIcons();
     
@@ -98,7 +96,18 @@ document.addEventListener('DOMContentLoaded', () => {
     setupDragAndDrop();
     
     // Carrega o estado salvo do Firebase ao iniciar
-    loadStateFromFirebase();
+    console.log("⏳ A carregar o estado do Firebase...");
+    try {
+        await loadStateFromFirebase();
+        console.log("✅ Estado carregado com sucesso!");
+    } catch (error) {
+        console.error("❌ Erro ao carregar o estado do Firebase:", error);
+        Swal.fire({
+            icon: 'error',
+            title: 'Erro ao Carregar Dados',
+            text: 'Não foi possível carregar as configurações guardadas. Verifique a consola (F12) para mais detalhes.',
+        });
+    }
 
     // Adiciona os listeners de eventos para cliques e outras interações
     setupEventListeners();
@@ -107,7 +116,7 @@ document.addEventListener('DOMContentLoaded', () => {
 function populateEntityLibrary() {
     const list = document.getElementById('entity-list');
     const template = document.getElementById('entity-card-template');
-    list.innerHTML = ''; // Limpa a lista para evitar duplicação
+    list.innerHTML = '';
     initialEntities.forEach(entity => {
         const clone = template.content.cloneNode(true);
         const card = clone.querySelector('.entity-card');
@@ -117,7 +126,7 @@ function populateEntityLibrary() {
         clone.querySelector('.entity-name').textContent = entity.name;
         list.appendChild(clone);
     });
-    lucide.createIcons(); // Recria ícones após adicionar novos elementos
+    lucide.createIcons();
 }
 
 function populateFieldsToolbox() {
@@ -138,15 +147,11 @@ function populateFieldsToolbox() {
 // ==== LÓGICA DE DRAG-AND-DROP ====
 
 function setupDragAndDrop() {
-    // 1. Arrastar da Biblioteca de Entidades para os Módulos
+    console.log("🛠️ A configurar a funcionalidade de arrastar e soltar...");
     const entityList = document.getElementById('entity-list');
     new Sortable(entityList, {
-        group: {
-            name: 'entities',
-            pull: 'clone', // Clona o item em vez de mover
-            put: false
-        },
-        sort: false, // Não permite reordenar na biblioteca
+        group: { name: 'entities', pull: 'clone', put: false },
+        sort: false,
         animation: 150,
     });
 
@@ -154,18 +159,13 @@ function setupDragAndDrop() {
         new Sortable(dropzone, {
             group: 'entities',
             animation: 150,
-            onAdd: handleEntityDrop // Função chamada quando uma entidade é solta aqui
+            onAdd: handleEntityDrop
         });
     });
     
-    // 2. Arrastar da Toolbox de Campos para o Construtor de Formulário
     const fieldsToolbox = document.getElementById('fields-toolbox');
      new Sortable(fieldsToolbox, {
-        group: {
-            name: 'fields',
-            pull: 'clone',
-            put: false
-        },
+        group: { name: 'fields', pull: 'clone', put: false },
         sort: false,
         animation: 150,
     });
@@ -174,9 +174,10 @@ function setupDragAndDrop() {
     new Sortable(formBuilderDropzone, {
         group: 'fields',
         animation: 150,
-        onAdd: handleFieldDrop, // Função chamada quando um campo é solto aqui
-        handle: '[data-lucide="grip-vertical"]', // Define o ícone como "alça" para reordenar
+        onAdd: handleFieldDrop,
+        handle: '[data-lucide="grip-vertical"]',
     });
+    console.log("👍 Funcionalidade de arrastar e soltar configurada.");
 }
 
 function handleEntityDrop(event) {
@@ -186,9 +187,8 @@ function handleEntityDrop(event) {
     const moduleEl = to.closest('.module-quadro');
     const moduleId = moduleEl.dataset.moduleId;
 
-    // Previne que a mesma entidade seja adicionada duas vezes ao mesmo módulo
     if (moduleEl.querySelector(`.dropped-entity-card[data-entity-id="${entityId}"]`)) {
-        item.remove(); // Remove o clone arrastado
+        item.remove();
         Swal.fire({
             icon: 'warning',
             title: 'Entidade já existe!',
@@ -199,7 +199,6 @@ function handleEntityDrop(event) {
         return;
     }
     
-    // Substitui o item clonado da biblioteca por um template customizado para a área de drop
     const template = document.getElementById('dropped-entity-card-template');
     const clone = template.content.cloneNode(true);
     const card = clone.querySelector('.dropped-entity-card');
@@ -212,10 +211,9 @@ function handleEntityDrop(event) {
     clone.querySelector('.entity-icon').setAttribute('data-lucide', entityInfo.icon);
     clone.querySelector('.entity-name').textContent = entityName;
     
-    item.replaceWith(clone); // Troca o item arrastado pelo template final
+    item.replaceWith(clone);
     lucide.createIcons();
 
-    // Adiciona uma animação e a remove após um tempo para feedback visual
     const newCard = moduleEl.querySelector(`.dropped-entity-card[data-entity-id="${entityId}"]`);
     setTimeout(() => newCard.classList.remove('animate-pulse'), 500);
     
@@ -227,9 +225,8 @@ async function handleFieldDrop(event) {
     const fieldType = item.dataset.fieldType;
     const fieldInfo = fieldTypes.find(f => f.type === fieldType);
     
-    item.remove(); // Remove o item da toolbox que foi clonado
+    item.remove();
 
-    // Usa SweetAlert2 para criar um formulário de configuração do campo
     const { value: formValues, isConfirmed } = await Swal.fire({
         title: `Adicionar Campo: ${fieldInfo.name}`,
         html:
@@ -255,7 +252,7 @@ async function handleFieldDrop(event) {
 
     if (isConfirmed && formValues) {
         const fieldData = {
-            id: `field_${Date.now()}`, // ID único baseado no tempo
+            id: `field_${Date.now()}`,
             type: fieldType,
             ...formValues
         };
@@ -272,11 +269,11 @@ function renderFormField(fieldData) {
 
     const card = clone.querySelector('.form-field-card');
     card.dataset.fieldId = fieldData.id;
-    card.dataset.fieldData = JSON.stringify(fieldData); // Armazena todos os dados do campo no próprio elemento
+    card.dataset.fieldData = JSON.stringify(fieldData);
 
     const fieldInfo = fieldTypes.find(f => f.type === fieldData.type);
     clone.querySelector('.field-icon').setAttribute('data-lucide', fieldInfo.icon);
-    clone.querySelector('.field-label').textContent = fieldData.label + (fieldData.required ? '*' : ''); // Adiciona * se for obrigatório
+    clone.querySelector('.field-label').textContent = fieldData.label + (fieldData.required ? '*' : '');
     clone.querySelector('.field-type').textContent = fieldInfo.name;
 
     dropzone.appendChild(clone);
@@ -294,19 +291,17 @@ function openModal(entityCard) {
 
     title.textContent = `Editando a Entidade: ${entityName}`;
     
-    // Armazena o contexto atual (módulo e entidade) no modal para usar ao salvar
     modal.dataset.currentModuleId = moduleId;
     modal.dataset.currentEntityId = entityId;
     modal.dataset.currentEntityName = entityName;
 
-    // Limpa o construtor anterior e carrega a estrutura já salva para esta entidade
     document.getElementById('form-builder-dropzone').innerHTML = '';
     loadStructureForEntity(moduleId, entityId);
 
     modal.classList.remove('hidden');
     setTimeout(() => {
         modalContent.classList.remove('scale-95', 'opacity-0');
-    }, 10); // Pequeno delay para a animação CSS funcionar
+    }, 10);
 }
 
 function closeModal() {
@@ -319,7 +314,7 @@ function closeModal() {
 }
 
 function setupEventListeners() {
-    // Abrir e fechar o modal do construtor
+    console.log("🎧 A configurar os listeners de eventos...");
     document.body.addEventListener('click', e => {
         const configureBtn = e.target.closest('.configure-btn');
         if (configureBtn) {
@@ -331,7 +326,6 @@ function setupEventListeners() {
     document.getElementById('close-modal-btn').addEventListener('click', closeModal);
     document.getElementById('save-structure-btn').addEventListener('click', saveCurrentStructure);
 
-    // Deletar e editar campos no construtor
     document.getElementById('form-builder-dropzone').addEventListener('click', e => {
          const deleteBtn = e.target.closest('.delete-field-btn');
          if (deleteBtn) {
@@ -354,21 +348,21 @@ function setupEventListeners() {
          
          const editBtn = e.target.closest('.edit-field-btn');
          if(editBtn) {
-            // A lógica de edição pode ser implementada aqui, abrindo um modal similar ao de criação
             alert('Função de edição a ser implementada!');
          }
     });
+    console.log("👍 Listeners de eventos configurados.");
 }
 
 // ==== INTERAÇÃO COM FIREBASE REALTIME DATABASE ====
 
 async function saveEntityToModule(moduleId, entityId, entityName) {
-    // Salva um placeholder para a estrutura da entidade no banco de dados.
-    // Isso garante que a entidade exista no módulo antes mesmo de ser configurada.
     const path = `schemas/${moduleId}/${entityId}`;
-    const existingData = await get(ref(db, path));
-    if (!existingData.exists()) {
-        await set(ref(db, path), {
+    const dbRef = ref(db, path);
+    const snapshot = await get(dbRef);
+    if (!snapshot.exists()) {
+        console.log(`A criar placeholder para a entidade '${entityName}' no módulo '${moduleId}'.`);
+        await set(dbRef, {
             entityName: entityName,
             attributes: []
         });
@@ -384,19 +378,17 @@ function saveCurrentStructure() {
     const formBuilder = document.getElementById('form-builder-dropzone');
     const fieldCards = formBuilder.querySelectorAll('.form-field-card');
 
-    // Mapeia os cards do formulário para um array de objetos de atributos
     const attributes = Array.from(fieldCards).map(card => {
         return JSON.parse(card.dataset.fieldData);
     });
 
-    const schema = {
-        entityName,
-        attributes
-    };
-    
+    const schema = { entityName, attributes };
     const dbRef = ref(db, `schemas/${moduleId}/${entityId}`);
+    
+    console.log(`💾 A guardar a estrutura para '${entityName}'...`);
     set(dbRef, schema)
         .then(() => {
+            console.log("✅ Estrutura guardada com sucesso.");
             Swal.fire({
                 icon: 'success',
                 title: 'Guardado com sucesso!',
@@ -407,11 +399,11 @@ function saveCurrentStructure() {
             closeModal();
         })
         .catch(error => {
-            console.error("Erro ao guardar no Firebase: ", error);
+            console.error("❌ Erro ao guardar no Firebase:", error);
             Swal.fire({
                 icon: 'error',
                 title: 'Oops...',
-                text: 'Algo correu mal ao guardar a estrutura!'
+                text: 'Algo correu mal ao guardar a estrutura! Verifique a consola (F12).'
             });
         });
 }
@@ -421,6 +413,7 @@ async function loadStateFromFirebase() {
      const snapshot = await get(schemasRef);
      if (snapshot.exists()) {
         const schemas = snapshot.val();
+        console.log("🔎 Foram encontradas estruturas guardadas no Firebase. A renderizá-las...");
         for (const moduleId in schemas) {
             const moduleEl = document.querySelector(`.module-quadro[data-module-id="${moduleId}"]`);
             if(moduleEl) {
@@ -428,7 +421,6 @@ async function loadStateFromFirebase() {
                 for(const entityId in schemas[moduleId]) {
                     const entityData = schemas[moduleId][entityId];
                     
-                     // Renderiza o card da entidade no módulo correspondente
                     const template = document.getElementById('dropped-entity-card-template');
                     const clone = template.content.cloneNode(true);
                     const card = clone.querySelector('.dropped-entity-card');
@@ -447,18 +439,23 @@ async function loadStateFromFirebase() {
             }
         }
         lucide.createIcons();
+     } else {
+        console.log("ℹ️ Nenhuma estrutura encontrada no Firebase para carregar.");
      }
 }
 
 async function loadStructureForEntity(moduleId, entityId) {
     const path = `schemas/${moduleId}/${entityId}`;
-    const snapshot = await get(ref(db, path));
+    const dbRef = ref(db, path);
+    const snapshot = await get(dbRef);
 
     if (snapshot.exists()) {
         const schema = snapshot.val();
-        // Se a entidade tiver atributos guardados, renderiza cada um deles no construtor
         if (schema.attributes && schema.attributes.length > 0) {
+            console.log(`Renderizando ${schema.attributes.length} campo(s) para a entidade '${entityId}'.`);
             schema.attributes.forEach(attr => renderFormField(attr));
+        } else {
+            console.log(`A entidade '${entityId}' não tem campos configurados.`);
         }
     }
 }
