@@ -77,6 +77,10 @@ body {
     color: #4338ca; /* Cor indigo-700 do Tailwind */
     transform: scale(1.05); /* Efeito de zoom sutil ao passar o mouse */
 }
+.toolbox-item[data-field-type="relationship"] {
+    background-color: #eef2ff;
+    border-color: #a5b4fc;
+}
 
 /* Utilitário para esconder a barra de rolagem mas manter a rolagem funcional */
 .no-scrollbar::-webkit-scrollbar {
