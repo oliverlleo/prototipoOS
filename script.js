@@ -199,8 +199,8 @@ function setupDragAndDrop() {
         group: 'fields',
         animation: 150,
         onAdd: handleFieldDrop,
-        // CORREÇÃO: A linha 'handle' foi removida.
-        // handle: '[data-lucide="grip-vertical"]', // Esta linha estava a causar o problema.
+        // CORREÇÃO: O 'handle' foi reintroduzido para permitir a reordenação dos campos existentes.
+        handle: '[data-lucide="grip-vertical"]', 
     });
 }
 
@@ -362,6 +362,32 @@ function setupEventListeners() {
             const card = configureBtn.closest('.dropped-entity-card');
             openModal(card);
         }
+
+        // NOVO: Listener para o botão de eliminar entidade
+        const deleteEntityBtn = e.target.closest('.delete-entity-btn');
+        if (deleteEntityBtn) {
+            const card = deleteEntityBtn.closest('.dropped-entity-card');
+            const entityName = card.dataset.entityName;
+            const moduleId = card.dataset.moduleId;
+            const entityId = card.dataset.entityId;
+
+            Swal.fire({
+                title: `Tem a certeza?`,
+                text: `Deseja remover a entidade '${entityName}' deste módulo? Esta ação não pode ser revertida.`,
+                icon: 'warning',
+                showCancelButton: true,
+                confirmButtonColor: '#d33',
+                cancelButtonColor: '#3085d6',
+                confirmButtonText: 'Sim, remover!',
+                cancelButtonText: 'Cancelar'
+            }).then((result) => {
+                if (result.isConfirmed) {
+                    card.remove();
+                    deleteEntityFromModule(moduleId, entityId);
+                    Swal.fire('Removido!', `A entidade '${entityName}' foi removida.`, 'success');
+                }
+            });
+        }
     });
     
     document.getElementById('close-modal-btn').addEventListener('click', closeModal);
@@ -394,6 +420,8 @@ function setupEventListeners() {
     });
 }
 
+// ==== INTERAÇÃO COM FIREBASE REALTIME DATABASE ====
+
 async function saveEntityToModule(moduleId, entityId, entityName) {
     const path = `schemas/${moduleId}/${entityId}`;
     const dbRef = ref(db, path);
@@ -403,6 +431,23 @@ async function saveEntityToModule(moduleId, entityId, entityName) {
             entityName: entityName,
             attributes: []
         });
+    }
+}
+
+/**
+ * NOVO: Remove uma entidade inteira do Firebase.
+ * @param {string} moduleId - O ID do módulo.
+ * @param {string} entityId - O ID da entidade a ser removida.
+ */
+async function deleteEntityFromModule(moduleId, entityId) {
+    const path = `schemas/${moduleId}/${entityId}`;
+    const dbRef = ref(db, path);
+    try {
+        await set(dbRef, null); // Definir o valor como null remove o nó no Realtime Database
+        console.log(`✅ Entidade '${entityId}' removida com sucesso do módulo '${moduleId}'.`);
+    } catch (error) {
+        console.error(`❌ Erro ao remover a entidade '${entityId}':`, error);
+        Swal.fire('Erro', 'Ocorreu um problema ao remover a entidade da base de dados.', 'error');
     }
 }
 
