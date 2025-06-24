@@ -12,7 +12,7 @@
     <script src="https://cdnjs.cloudflare.com/ajax/libs/Sortable/1.15.0/Sortable.min.js"></script>
     <script src="https://cdn.jsdelivr.net/npm/lucide@0.395.0/dist/umd/lucide.min.js"></script>
 
-    <!-- Firebase SDKs - Carregados de forma tradicional para máxima compatibilidade -->
+    <!-- Firebase SDKs -->
     <script src="https://www.gstatic.com/firebasejs/9.15.0/firebase-app-compat.js"></script>
     <script src="https://www.gstatic.com/firebasejs/9.15.0/firebase-database-compat.js"></script>
 
@@ -26,7 +26,7 @@
         <div class="spinner"></div>
     </div>
 
-    <!-- ESTRUTURA PRINCIPAL DA APLICAÇÃO (inicialmente oculta com style) -->
+    <!-- ESTRUTURA PRINCIPAL DA APLICAÇÃO -->
     <div id="app" class="h-screen w-screen flex flex-col overflow-hidden" style="display: none;">
         
         <header class="bg-white border-b border-slate-200 p-4 flex justify-between items-center shadow-sm z-20">
@@ -57,16 +57,14 @@
 
             <section class="flex-1 p-8 overflow-y-auto">
                 <div class="max-w-7xl mx-auto">
-                    <h2 class="text-2xl font-bold mb-6 flex items-center gap-2"><i data-lucide="box-select" class="text-indigo-500"></i> Módulos do Sistema</h2>
+                    <div class="flex justify-between items-center mb-6">
+                        <h2 class="text-2xl font-bold flex items-center gap-2"><i data-lucide="box-select" class="text-indigo-500"></i> Módulos do Sistema</h2>
+                        <button id="add-new-module-btn" class="bg-indigo-600 text-white px-4 py-2 rounded-lg hover:bg-indigo-700 transition-colors flex items-center gap-2">
+                            <i data-lucide="plus"></i><span>Adicionar Módulo</span>
+                        </button>
+                    </div>
                     <div id="module-container" class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-8">
-                        <div class="module-quadro bg-slate-100 rounded-xl p-6 min-h-[300px] border border-dashed border-slate-300" data-module-id="vendas">
-                            <h3 class="text-lg font-bold text-slate-700 mb-4">Módulo de Vendas (CRM)</h3>
-                            <div class="entities-dropzone space-y-3 min-h-[200px]"></div>
-                        </div>
-                         <div class="module-quadro bg-slate-100 rounded-xl p-6 min-h-[300px] border border-dashed border-slate-300" data-module-id="financeiro">
-                            <h3 class="text-lg font-bold text-slate-700 mb-4">Módulo Financeiro</h3>
-                            <div class="entities-dropzone space-y-3 min-h-[200px]"></div>
-                        </div>
+                        <!-- Módulos criados dinamicamente aparecerão aqui -->
                     </div>
                 </div>
             </section>
@@ -97,6 +95,15 @@
     </div>
     
     <!-- TEMPLATES -->
+    <template id="module-template">
+        <div class="module-quadro bg-slate-100 rounded-xl p-6 min-h-[300px] border border-dashed border-slate-300" data-module-id="">
+            <div class="flex justify-between items-center mb-4">
+                 <h3 class="module-title text-lg font-bold text-slate-700"></h3>
+                 <button class="delete-module-btn text-slate-400 hover:text-red-600 p-1 rounded-md transition-colors"><i data-lucide="trash-2" class="h-5 w-5"></i></button>
+            </div>
+            <div class="entities-dropzone space-y-3 min-h-[200px]"></div>
+        </div>
+    </template>
     <template id="entity-card-template">
         <div class="entity-card bg-white p-4 rounded-lg border border-slate-200 shadow-sm flex items-center justify-between cursor-grab transition-shadow hover:shadow-md" data-entity-id="" data-entity-name="" data-entity-icon="">
             <div class="flex items-center gap-3"><i class="entity-icon text-indigo-500"></i><span class="entity-name font-semibold"></span></div>
