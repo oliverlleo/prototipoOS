@@ -1,10 +1,11 @@
 /*
 ================================================================================
-|| SCRIPT.JS - VERSÃO ROBUSTA E CORRIGIDA ||
+|| SCRIPT.JS - VERSÃO ROBUSTA E À PROVA DE FALHAS ||
 ================================================================================
-Este script foi reestruturado para garantir que todas as dependências externas
-(Firebase, Lucide, SortableJS) estejam completamente carregadas antes de qualquer
-código da aplicação ser executado. Isto é feito através do evento `window.onload`.
+Este script foi reestruturado para ser mais resiliente. Ele espera que a página
+inteira carregue (`window.onload`) e trata a biblioteca de ícones (Lucide) como
+opcional. Se os ícones não carregarem, a aplicação arranca na mesma, garantindo
+que a funcionalidade principal nunca é bloqueada.
 ================================================================================
 */
 
@@ -24,11 +25,11 @@ const firebaseConfig = {
     measurementId: "G-85EK8CECR5"
 };
 
-// Variável global para a base de dados
+// Variáveis globais
 let db;
+let iconsAvailable = false; // Flag para controlar se os ícones estão disponíveis
 
 // ==== DADOS DE CONFIGURAÇÃO INICIAL ====
-
 const initialEntities = [
     { id: 'cliente', name: 'Cliente', icon: 'user-round' },
     { id: 'proposta', name: 'Proposta', icon: 'file-text' },
@@ -52,12 +53,20 @@ const fieldTypes = [
 /**
  * A função `initApp` é o coração da aplicação.
  * É chamada pelo evento `window.onload`, garantindo que todo o HTML, CSS, imagens e
- * scripts externos (como Lucide e SortableJS) estejam completamente carregados.
+ * scripts externos estejam completamente carregados.
  */
 async function initApp() {
     console.log("🚀 A aplicação está a iniciar...");
 
-    // 1. Inicializa o Firebase
+    // 1. Verifica se a biblioteca de ícones carregou
+    if (typeof lucide !== 'undefined' && lucide) {
+        iconsAvailable = true;
+        console.log("✨ Ícones (Lucide) disponíveis.");
+    } else {
+        console.warn("⚠️ A biblioteca de ícones (Lucide) não carregou. A aplicação continuará sem ícones.");
+    }
+
+    // 2. Inicializa o Firebase
     try {
         const appFirebase = initializeApp(firebaseConfig);
         db = getDatabase(appFirebase);
@@ -68,10 +77,11 @@ async function initApp() {
         return; // Para a execução se o Firebase falhar
     }
 
-    // 2. Inicializa as bibliotecas e a UI
-    lucide.createIcons();
-    console.log("✨ Ícones (Lucide) criados.");
-
+    // 3. Inicializa a UI
+    if (iconsAvailable) {
+        lucide.createIcons();
+    }
+    
     populateEntityLibrary();
     populateFieldsToolbox();
     console.log("📚 Bibliotecas populadas.");
@@ -82,7 +92,7 @@ async function initApp() {
     setupEventListeners();
     console.log("🎧 Listeners de eventos configurados.");
     
-    // 3. Carrega os dados guardados do Firebase
+    // 4. Carrega os dados guardados do Firebase
     try {
         await loadStateFromFirebase();
         console.log("✅ Estado carregado com sucesso do Firebase!");
@@ -95,7 +105,7 @@ async function initApp() {
         });
     }
 
-    // 4. Mostra a aplicação e esconde o carregamento
+    // 5. Mostra a aplicação e esconde o carregamento
     const loadingOverlay = document.getElementById('loading-overlay');
     const appContainer = document.getElementById('app');
     
@@ -109,7 +119,13 @@ async function initApp() {
 window.onload = initApp;
 
 
-// ---- Funções de Suporte (sem alterações na lógica) ----
+// ---- Funções de Suporte ----
+
+function tryCreateIcons() {
+    if (iconsAvailable) {
+        lucide.createIcons();
+    }
+}
 
 function populateEntityLibrary() {
     const list = document.getElementById('entity-list');
@@ -120,11 +136,18 @@ function populateEntityLibrary() {
         const card = clone.querySelector('.entity-card');
         card.dataset.entityId = entity.id;
         card.dataset.entityName = entity.name;
-        clone.querySelector('.entity-icon').setAttribute('data-lucide', entity.icon);
+        
+        const iconEl = clone.querySelector('.entity-icon');
+        if (iconsAvailable) {
+            iconEl.setAttribute('data-lucide', entity.icon);
+        } else {
+            iconEl.style.display = 'none'; // Esconde o elemento do ícone
+        }
+
         clone.querySelector('.entity-name').textContent = entity.name;
         list.appendChild(clone);
     });
-    lucide.createIcons();
+    tryCreateIcons();
 }
 
 function populateFieldsToolbox() {
@@ -135,11 +158,18 @@ function populateFieldsToolbox() {
         const clone = template.content.cloneNode(true);
         const item = clone.querySelector('.toolbox-item');
         item.dataset.fieldType = field.type;
-        clone.querySelector('.field-icon').setAttribute('data-lucide', field.icon);
+        
+        const iconEl = clone.querySelector('.field-icon');
+        if (iconsAvailable) {
+            iconEl.setAttribute('data-lucide', field.icon);
+        } else {
+            iconEl.style.display = 'none';
+        }
+        
         clone.querySelector('.field-name').textContent = field.name;
         toolbox.appendChild(clone);
     });
-    lucide.createIcons();
+    tryCreateIcons();
 }
 
 function setupDragAndDrop() {
@@ -202,11 +232,18 @@ function handleEntityDrop(event) {
     card.dataset.moduleId = moduleId;
     
     const entityInfo = initialEntities.find(e => e.id === entityId);
-    clone.querySelector('.entity-icon').setAttribute('data-lucide', entityInfo.icon);
+    
+    const iconEl = clone.querySelector('.entity-icon');
+    if (iconsAvailable) {
+       iconEl.setAttribute('data-lucide', entityInfo.icon);
+    } else {
+       iconEl.style.display = 'none';
+    }
+
     clone.querySelector('.entity-name').textContent = entityName;
     
     item.replaceWith(clone);
-    lucide.createIcons();
+    tryCreateIcons();
 
     const newCard = moduleEl.querySelector(`.dropped-entity-card[data-entity-id="${entityId}"]`);
     setTimeout(() => newCard.classList.remove('animate-pulse'), 500);
@@ -264,12 +301,19 @@ function renderFormField(fieldData) {
     card.dataset.fieldData = JSON.stringify(fieldData);
 
     const fieldInfo = fieldTypes.find(f => f.type === fieldData.type);
-    clone.querySelector('.field-icon').setAttribute('data-lucide', fieldInfo.icon);
+    
+    const iconEl = clone.querySelector('.field-icon');
+    if (iconsAvailable) {
+        iconEl.setAttribute('data-lucide', fieldInfo.icon);
+    } else {
+        iconEl.style.display = 'none';
+    }
+    
     clone.querySelector('.field-label').textContent = fieldData.label + (fieldData.required ? '*' : '');
     clone.querySelector('.field-type').textContent = fieldInfo.name;
 
     dropzone.appendChild(clone);
-    lucide.createIcons();
+    tryCreateIcons();
 }
 
 function openModal(entityCard) {
@@ -414,7 +458,14 @@ async function loadStateFromFirebase() {
                     card.dataset.moduleId = moduleId;
                     
                     const entityInfo = initialEntities.find(e => e.id === entityId);
-                    clone.querySelector('.entity-icon').setAttribute('data-lucide', entityInfo?.icon || 'help-circle');
+                    
+                    const iconEl = clone.querySelector('.entity-icon');
+                    if (iconsAvailable && entityInfo) {
+                       iconEl.setAttribute('data-lucide', entityInfo.icon);
+                    } else {
+                       iconEl.style.display = 'none';
+                    }
+
                     clone.querySelector('.entity-name').textContent = entityData.entityName;
                     card.classList.remove('animate-pulse');
 
@@ -422,7 +473,7 @@ async function loadStateFromFirebase() {
                 }
             }
         }
-        lucide.createIcons();
+        tryCreateIcons();
      }
 }
 
