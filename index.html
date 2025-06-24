@@ -5,23 +5,28 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Construtor Visual de ERP/CRM</title>
     
+    <!-- Dependências Externas -->
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
     <script src="https://cdn.tailwindcss.com"></script>
     <script src="https://cdn.jsdelivr.net/npm/sweetalert2@11"></script>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/Sortable/1.15.0/Sortable.min.js"></script>
     <script src="https://cdn.jsdelivr.net/npm/lucide@0.395.0/dist/umd/lucide.min.js"></script>
 
+    <!-- Firebase SDKs - Carregados de forma tradicional para máxima compatibilidade -->
     <script src="https://www.gstatic.com/firebasejs/9.15.0/firebase-app-compat.js"></script>
     <script src="https://www.gstatic.com/firebasejs/9.15.0/firebase-database-compat.js"></script>
 
+    <!-- Link para o ficheiro CSS externo -->
     <link rel="stylesheet" href="style.css">
 </head>
 <body class="text-slate-800">
 
+    <!-- Indicador de Carregamento Visual -->
     <div id="loading-overlay" class="loading-overlay">
         <div class="spinner"></div>
     </div>
 
+    <!-- ESTRUTURA PRINCIPAL DA APLICAÇÃO (inicialmente oculta com style) -->
     <div id="app" class="h-screen w-screen flex flex-col overflow-hidden" style="display: none;">
         
         <header class="bg-white border-b border-slate-200 p-4 flex justify-between items-center shadow-sm z-20">
@@ -91,6 +96,7 @@
         </div>
     </div>
     
+    <!-- TEMPLATES -->
     <template id="entity-card-template">
         <div class="entity-card bg-white p-4 rounded-lg border border-slate-200 shadow-sm flex items-center justify-between cursor-grab transition-shadow hover:shadow-md" data-entity-id="" data-entity-name="" data-entity-icon="">
             <div class="flex items-center gap-3"><i class="entity-icon text-indigo-500"></i><span class="entity-name font-semibold"></span></div>
@@ -127,6 +133,7 @@
         </div>
     </template>
 
-    <script src="script.js" defer></script>
+    <!-- Link para o ficheiro JavaScript externo. A correção está aqui -->
+    <script src="script.js" type="module" defer></script>
 </body>
 </html>
