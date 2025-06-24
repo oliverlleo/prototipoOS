@@ -32,7 +32,7 @@ const fieldTypes = [
     { type: 'checkbox', name: 'Caixa de Seleção', icon: 'check-square' },
     { type: 'select', name: 'Lista Suspensa', icon: 'chevron-down-square' },
     { type: 'file', name: 'Upload de Ficheiro', icon: 'upload-cloud' },
-    { type: 'relationship', name: 'Relacionamento', icon: 'link' },
+    { type: 'relationship', name: 'Relacionamento (Sub-Tabela)', icon: 'link' },
 ];
 
 // ==== PONTO DE ENTRADA DA APLICAÇÃO ====
@@ -65,8 +65,6 @@ async function initApp() {
     console.log("👍 Aplicação pronta.");
 }
 
-// O `defer` no tag <script> no HTML garante que o DOM está pronto, mas `window.onload` garante que TUDO (imagens, etc.) está carregado.
-// Para máxima segurança, usamos `window.onload`.
 window.onload = initApp;
 
 // ---- Funções de Suporte ----
@@ -194,10 +192,10 @@ async function handleFieldDrop(event) {
     
     item.remove();
     
-    let modalHtml = `<input id="swal-input-label" class="swal2-input" placeholder="Nome do Campo (ex: Cliente Associado)">`;
+    let modalHtml = `<input id="swal-input-label" class="swal2-input" placeholder="Nome do Campo (ex: Propostas do Cliente)">`;
     if (fieldType === 'relationship') {
         const entityOptions = allEntities.map(e => `<option value="${e.id}|${e.name}">${e.name}</option>`).join('');
-        modalHtml += `<p class="text-sm mt-4 mb-2">Ligar a qual entidade?</p><select id="swal-input-target-entity" class="swal2-select">${entityOptions}</select>`;
+        modalHtml += `<p class="text-sm mt-4 mb-2">Mostrar uma tabela de qual entidade?</p><select id="swal-input-target-entity" class="swal2-select">${entityOptions}</select>`;
     } else {
         modalHtml += `<input id="swal-input-placeholder" class="swal2-input" placeholder="Texto de ajuda (opcional)">`;
         if (fieldType === 'select') {
@@ -247,7 +245,7 @@ function renderFormField(fieldData) {
     if (!iconsAvailable) { handleEl.style.display = 'none'; }
     clone.querySelector('.field-label').textContent = fieldData.label + (fieldData.required ? '*' : '');
     if (fieldData.type === 'relationship') {
-        clone.querySelector('.field-type').textContent = `Relacionamento -> ${fieldData.targetEntityName}`;
+        clone.querySelector('.field-type').textContent = `Tabela Aninhada -> ${fieldData.targetEntityName}`;
     } else {
         clone.querySelector('.field-type').textContent = fieldInfo.name;
     }
