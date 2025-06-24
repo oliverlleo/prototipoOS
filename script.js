@@ -1,27 +1,10 @@
 /*
 ================================================================================
-|| INSTRUÇÕES DE DIAGNÓSTICO ||
+|| SCRIPT.JS - VERSÃO ROBUSTA E CORRIGIDA ||
 ================================================================================
-
-Olá! Se o construtor ainda não funciona, estes passos ajudar-nos-ão a descobrir porquê.
-
-O passo mais importante é verificar a "Consola do Desenvolvedor" do seu navegador.
-
-COMO ABRIR A CONSOLA:
-  - No Chrome, Firefox ou Edge: Pressione a tecla F12 e clique na aba "Consola".
-  - No Safari: Vá a Preferências > Avançado e ative "Mostrar menu Desenvolver na barra de menus". Depois, pode usar o atalho Option + ⌘ + C.
-
-O QUE PROCURAR NA CONSOLA:
-  1. Procure por mensagens a vermelho (erros). Elas dir-nos-ão exatamente o que está a falhar.
-  2. Veja se as minhas mensagens de diagnóstico aparecem. Você deverá ver algo como:
-     - "Firebase inicializado com sucesso."
-     - "A configurar a funcionalidade de arrastar e soltar..."
-     - "A carregar o estado do Firebase..."
-     - "Estado carregado com sucesso!" ou "Erro ao carregar o estado do Firebase: ..."
-
-Se vir um erro, ele geralmente indica o problema (ex: problema com as regras do Firebase, falha de rede, etc.).
-Lembre-se que continua a ser essencial usar um servidor local (como a extensão "Live Server") e ter as regras do Firebase como públicas.
-
+Este script foi reestruturado para garantir que todas as dependências externas
+(Firebase, Lucide, SortableJS) estejam completamente carregadas antes de qualquer
+código da aplicação ser executado. Isto é feito através do evento `window.onload`.
 ================================================================================
 */
 
@@ -41,21 +24,8 @@ const firebaseConfig = {
     measurementId: "G-85EK8CECR5"
 };
 
-// ==== INICIALIZAÇÃO E DIAGNÓSTICO ====
+// Variável global para a base de dados
 let db;
-try {
-    const app = initializeApp(firebaseConfig);
-    db = getDatabase(app);
-    console.log("✅ Firebase inicializado com sucesso.");
-} catch (error) {
-    console.error("❌ ERRO CRÍTICO AO INICIALIZAR O FIREBASE:", error);
-    Swal.fire({
-        icon: 'error',
-        title: 'Erro de Conexão com o Firebase',
-        text: 'Não foi possível ligar à base de dados. Verifique a consola (F12) para mais detalhes.',
-    });
-}
-
 
 // ==== DADOS DE CONFIGURAÇÃO INICIAL ====
 
@@ -77,91 +47,69 @@ const fieldTypes = [
     { type: 'file', name: 'Upload de Ficheiro', icon: 'upload-cloud' },
 ];
 
-// ==== FUNÇÃO PRINCIPAL DA APLICAÇÃO ====
+// ==== PONTO DE ENTRADA DA APLICAÇÃO ====
 
 /**
- * Esta é a função principal que executa toda a lógica da aplicação.
- * Só é chamada depois de termos a certeza que o Firebase e a biblioteca de ícones (Lucide) estão prontos.
+ * A função `initApp` é o coração da aplicação.
+ * É chamada pelo evento `window.onload`, garantindo que todo o HTML, CSS, imagens e
+ * scripts externos (como Lucide e SortableJS) estejam completamente carregados.
  */
-async function startApp() {
-    if (!db) {
-        console.error("A base de dados não foi inicializada. A aplicação não pode continuar.");
-        return;
+async function initApp() {
+    console.log("🚀 A aplicação está a iniciar...");
+
+    // 1. Inicializa o Firebase
+    try {
+        const appFirebase = initializeApp(firebaseConfig);
+        db = getDatabase(appFirebase);
+        console.log("✅ Firebase inicializado com sucesso.");
+    } catch (error) {
+        console.error("❌ ERRO CRÍTICO AO INICIALIZAR O FIREBASE:", error);
+        document.getElementById('loading-overlay').innerHTML = 'Erro ao ligar à base de dados.';
+        return; // Para a execução se o Firebase falhar
     }
 
-    console.log("🚀 A iniciar a lógica principal da aplicação...");
-    
-    // Ativa os ícones do Lucide
+    // 2. Inicializa as bibliotecas e a UI
     lucide.createIcons();
-    
-    // Popula as bibliotecas com os dados iniciais
+    console.log("✨ Ícones (Lucide) criados.");
+
     populateEntityLibrary();
     populateFieldsToolbox();
+    console.log("📚 Bibliotecas populadas.");
 
-    // Configura toda a lógica de arrastar e soltar
     setupDragAndDrop();
+    console.log("🛠️ Funcionalidade de arrastar e soltar configurada.");
+
+    setupEventListeners();
+    console.log("🎧 Listeners de eventos configurados.");
     
-    // Carrega o estado salvo do Firebase ao iniciar
-    console.log("⏳ A carregar o estado do Firebase...");
+    // 3. Carrega os dados guardados do Firebase
     try {
         await loadStateFromFirebase();
-        console.log("✅ Estado carregado com sucesso!");
+        console.log("✅ Estado carregado com sucesso do Firebase!");
     } catch (error) {
         console.error("❌ Erro ao carregar o estado do Firebase:", error);
         Swal.fire({
             icon: 'error',
             title: 'Erro ao Carregar Dados',
-            text: 'Não foi possível carregar as configurações guardadas. Verifique a consola (F12) para mais detalhes.',
+            text: 'Não foi possível carregar as configurações guardadas. Verifique as regras de segurança do seu Firebase e a consola (F12) para mais detalhes.',
         });
     }
 
-    // Adiciona os listeners de eventos para cliques e outras interações
-    setupEventListeners();
+    // 4. Mostra a aplicação e esconde o carregamento
+    const loadingOverlay = document.getElementById('loading-overlay');
+    const appContainer = document.getElementById('app');
+    
+    loadingOverlay.style.display = 'none';
+    appContainer.classList.remove('hidden');
+    appContainer.classList.add('flex'); // Garante que a classe 'flex' é aplicada
+    console.log("👍 Aplicação pronta e visível!");
 }
 
+// Atribui a função initApp ao evento `window.onload`
+window.onload = initApp;
 
-// ==== PONTO DE ENTRADA DA APLICAÇÃO (CORRIGIDO) ====
 
-/**
- * Espera que o DOM esteja pronto e depois verifica se as dependências (Lucide) estão carregadas
- * antes de iniciar a aplicação.
- */
-document.addEventListener('DOMContentLoaded', () => {
-    waitForDependenciesAndStart();
-});
-
-/**
- * Verifica repetidamente se as dependências externas, como a biblioteca de ícones,
- * estão prontas para serem usadas.
- */
-function waitForDependenciesAndStart() {
-    const maxRetries = 50; // Tenta por 5 segundos (50 * 100ms)
-    let retries = 0;
-
-    const check = setInterval(() => {
-        // Verificação mais robusta: garante que 'lucide' existe e tem o método 'createIcons'.
-        if (typeof lucide !== 'undefined' && lucide && typeof lucide.createIcons === 'function') {
-            clearInterval(check); // Para a verificação
-            console.log("✨ Biblioteca Lucide carregada e pronta. A iniciar a aplicação.");
-            startApp(); // Inicia a aplicação principal
-        } else {
-            retries++;
-            if (retries > maxRetries) {
-                // Se exceder o tempo limite, para a verificação e informa o utilizador.
-                clearInterval(check);
-                console.error("❌ A biblioteca de ícones (Lucide) não conseguiu carregar após 5 segundos. A aplicação não pode continuar.");
-                Swal.fire({
-                    icon: 'error',
-                    title: 'Erro de Carregamento',
-                    text: 'Não foi possível carregar a biblioteca de ícones. Verifique a sua ligação à internet e a consola (F12) para erros de rede.',
-                });
-            } else {
-                console.log(`⌛ A aguardar pela biblioteca de ícones (Lucide)... Tentativa ${retries}/${maxRetries}`);
-            }
-        }
-    }, 100); // Verifica a cada 100 milissegundos
-}
-
+// ---- Funções de Suporte (sem alterações na lógica) ----
 
 function populateEntityLibrary() {
     const list = document.getElementById('entity-list');
@@ -194,10 +142,7 @@ function populateFieldsToolbox() {
     lucide.createIcons();
 }
 
-// ==== LÓGICA DE DRAG-AND-DROP ====
-
 function setupDragAndDrop() {
-    console.log("🛠️ A configurar a funcionalidade de arrastar e soltar...");
     const entityList = document.getElementById('entity-list');
     new Sortable(entityList, {
         group: { name: 'entities', pull: 'clone', put: false },
@@ -227,7 +172,6 @@ function setupDragAndDrop() {
         onAdd: handleFieldDrop,
         handle: '[data-lucide="grip-vertical"]',
     });
-    console.log("👍 Funcionalidade de arrastar e soltar configurada.");
 }
 
 function handleEntityDrop(event) {
@@ -310,8 +254,6 @@ async function handleFieldDrop(event) {
     }
 }
 
-// ==== RENDERIZAÇÃO E MANIPULAÇÃO DA UI ====
-
 function renderFormField(fieldData) {
     const dropzone = document.getElementById('form-builder-dropzone');
     const template = document.getElementById('form-field-template');
@@ -364,7 +306,6 @@ function closeModal() {
 }
 
 function setupEventListeners() {
-    console.log("🎧 A configurar os listeners de eventos...");
     document.body.addEventListener('click', e => {
         const configureBtn = e.target.closest('.configure-btn');
         if (configureBtn) {
@@ -401,17 +342,13 @@ function setupEventListeners() {
             alert('Função de edição a ser implementada!');
          }
     });
-    console.log("👍 Listeners de eventos configurados.");
 }
-
-// ==== INTERAÇÃO COM FIREBASE REALTIME DATABASE ====
 
 async function saveEntityToModule(moduleId, entityId, entityName) {
     const path = `schemas/${moduleId}/${entityId}`;
     const dbRef = ref(db, path);
     const snapshot = await get(dbRef);
     if (!snapshot.exists()) {
-        console.log(`A criar placeholder para a entidade '${entityName}' no módulo '${moduleId}'.`);
         await set(dbRef, {
             entityName: entityName,
             attributes: []
@@ -435,10 +372,8 @@ function saveCurrentStructure() {
     const schema = { entityName, attributes };
     const dbRef = ref(db, `schemas/${moduleId}/${entityId}`);
     
-    console.log(`💾 A guardar a estrutura para '${entityName}'...`);
     set(dbRef, schema)
         .then(() => {
-            console.log("✅ Estrutura guardada com sucesso.");
             Swal.fire({
                 icon: 'success',
                 title: 'Guardado com sucesso!',
@@ -463,7 +398,6 @@ async function loadStateFromFirebase() {
      const snapshot = await get(schemasRef);
      if (snapshot.exists()) {
         const schemas = snapshot.val();
-        console.log("🔎 Foram encontradas estruturas guardadas no Firebase. A renderizá-las...");
         for (const moduleId in schemas) {
             const moduleEl = document.querySelector(`.module-quadro[data-module-id="${moduleId}"]`);
             if(moduleEl) {
@@ -489,8 +423,6 @@ async function loadStateFromFirebase() {
             }
         }
         lucide.createIcons();
-     } else {
-        console.log("ℹ️ Nenhuma estrutura encontrada no Firebase para carregar.");
      }
 }
 
@@ -502,10 +434,7 @@ async function loadStructureForEntity(moduleId, entityId) {
     if (snapshot.exists()) {
         const schema = snapshot.val();
         if (schema.attributes && schema.attributes.length > 0) {
-            console.log(`Renderizando ${schema.attributes.length} campo(s) para a entidade '${entityId}'.`);
             schema.attributes.forEach(attr => renderFormField(attr));
-        } else {
-            console.log(`A entidade '${entityId}' não tem campos configurados.`);
         }
     }
 }
