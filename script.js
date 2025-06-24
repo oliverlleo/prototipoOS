@@ -77,13 +77,19 @@ const fieldTypes = [
     { type: 'file', name: 'Upload de Ficheiro', icon: 'upload-cloud' },
 ];
 
-// ==== INICIALIZAÇÃO DA UI ====
+// ==== FUNÇÃO PRINCIPAL DA APLICAÇÃO ====
 
-document.addEventListener('DOMContentLoaded', async () => {
+/**
+ * Esta é a função principal que executa toda a lógica da aplicação.
+ * Só é chamada depois de termos a certeza que o Firebase e a biblioteca de ícones (Lucide) estão prontos.
+ */
+async function startApp() {
     if (!db) {
         console.error("A base de dados não foi inicializada. A aplicação não pode continuar.");
         return;
     }
+
+    console.log("🚀 A iniciar a lógica principal da aplicação...");
     
     // Ativa os ícones do Lucide
     lucide.createIcons();
@@ -111,7 +117,25 @@ document.addEventListener('DOMContentLoaded', async () => {
 
     // Adiciona os listeners de eventos para cliques e outras interações
     setupEventListeners();
+}
+
+
+// ==== PONTO DE ENTRADA DA APLICAÇÃO ====
+
+// Espera que o conteúdo do HTML esteja pronto
+document.addEventListener('DOMContentLoaded', () => {
+    // Verifica repetidamente se a biblioteca 'lucide' já foi carregada
+    const checkLucide = setInterval(() => {
+        if (typeof lucide !== 'undefined') {
+            clearInterval(checkLucide); // Para a verificação
+            console.log("✨ Biblioteca Lucide carregada. A iniciar a aplicação.");
+            startApp(); // Inicia a aplicação principal
+        } else {
+            console.log("⌛ A aguardar pela biblioteca de ícones (Lucide)...");
+        }
+    }, 100); // Verifica a cada 100 milissegundos
 });
+
 
 function populateEntityLibrary() {
     const list = document.getElementById('entity-list');
