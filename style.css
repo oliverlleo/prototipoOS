@@ -5,6 +5,39 @@ body {
     background-color: #f8fafc; /* Cor de fundo slate-50 do Tailwind */
 }
 
+/* ===== NOVO: ESTILOS PARA O INDICADOR DE CARREGAMENTO ===== */
+.loading-overlay {
+    position: fixed;
+    inset: 0;
+    background-color: rgba(255, 255, 255, 0.8);
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    z-index: 100;
+    backdrop-filter: blur(4px);
+}
+
+.spinner {
+    width: 56px;
+    height: 56px;
+    border: 5px solid #e0e7ff; /* indigo-100 */
+    border-bottom-color: #6366f1; /* indigo-500 */
+    border-radius: 50%;
+    display: inline-block;
+    box-sizing: border-box;
+    animation: rotation 1s linear infinite;
+}
+
+@keyframes rotation {
+    0% {
+        transform: rotate(0deg);
+    }
+    100% {
+        transform: rotate(360deg);
+    }
+}
+/* ========================================================== */
+
 /* Animação de fade-in para elementos que aparecem na tela */
 @keyframes fadeIn {
     from {
