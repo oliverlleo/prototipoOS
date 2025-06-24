@@ -1,7 +1,3 @@
-// Importações do Firebase SDK
-import { initializeApp } from "https://www.gstatic.com/firebasejs/9.15.0/firebase-app.js";
-import { getDatabase, ref, set, get, push, remove } from "https://www.gstatic.com/firebasejs/9.15.0/firebase-database.js";
-
 // Configuração do Firebase
 const firebaseConfig = {
     apiKey: "AIzaSyAtuwWlErlNOW_c5BlBE_ktwSSmHGLjN2c",
@@ -43,9 +39,10 @@ const fieldTypes = [
 async function initApp() {
     console.log("🚀 A aplicação está a iniciar...");
     if (typeof lucide !== 'undefined' && lucide) { iconsAvailable = true; }
+    
     try {
-        const appFirebase = initializeApp(firebaseConfig);
-        db = getDatabase(appFirebase);
+        firebase.initializeApp(firebaseConfig);
+        db = firebase.database();
         console.log("✅ Firebase inicializado.");
     } catch (error) {
         console.error("❌ ERRO CRÍTICO AO INICIALIZAR O FIREBASE:", error);
@@ -68,6 +65,8 @@ async function initApp() {
     console.log("👍 Aplicação pronta.");
 }
 
+// O `defer` no tag <script> no HTML garante que o DOM está pronto, mas `window.onload` garante que TUDO (imagens, etc.) está carregado.
+// Para máxima segurança, usamos `window.onload`.
 window.onload = initApp;
 
 // ---- Funções de Suporte ----
@@ -105,8 +104,7 @@ async function loadAllEntities() {
     
     allEntities = [...predefinedEntities];
     
-    const customEntitiesRef = ref(db, 'custom_entities');
-    const snapshot = await get(customEntitiesRef);
+    const snapshot = await db.ref('custom_entities').get();
     if (snapshot.exists()) {
         const customEntities = snapshot.val();
         for (const entityId in customEntities) {
@@ -323,8 +321,8 @@ async function handleAddNewEntity() {
     });
     if (isConfirmed && formValues) {
         const newEntityData = { name: formValues.name, icon: formValues.icon, predefined: false };
-        const newEntityRef = push(ref(db, 'custom_entities'));
-        await set(newEntityRef, newEntityData);
+        const newEntityRef = db.ref('custom_entities').push();
+        await newEntityRef.set(newEntityData);
         await loadAllEntities();
         Swal.fire('Criado!', 'A sua nova entidade está pronta para ser usada.', 'success');
     }
@@ -341,10 +339,14 @@ function confirmAndRemoveCustomEntity(card) {
     Swal.fire({ title: `Eliminar Entidade '${entityName}'?`, text: `Isto irá remover a entidade da biblioteca e de todos os módulos onde foi usada. Esta ação é PERMANENTE.`, icon: 'error', showCancelButton: true, confirmButtonColor: '#d33', cancelButtonColor: '#3085d6', confirmButtonText: 'Sim, eliminar para sempre!', cancelButtonText: 'Cancelar' })
         .then(async result => {
             if (result.isConfirmed) {
-                await remove(ref(db, `custom_entities/${entityId}`));
-                const snapshot = await get(ref(db, 'schemas'));
+                await db.ref(`custom_entities/${entityId}`).remove();
+                const snapshot = await db.ref('schemas').get();
                 if (snapshot.exists()) {
-                    for (const moduleId in snapshot.val()) { await set(ref(db, `schemas/${moduleId}/${entityId}`), null); }
+                    const updates = {};
+                    for (const moduleId in snapshot.val()) { 
+                        updates[`/schemas/${moduleId}/${entityId}`] = null;
+                    }
+                    await db.ref().update(updates);
                 }
                 await loadAllEntities();
                 document.querySelectorAll(`.dropped-entity-card[data-entity-id="${entityId}"]`).forEach(c => c.remove());
@@ -354,14 +356,14 @@ function confirmAndRemoveCustomEntity(card) {
 }
 
 async function deleteEntityFromModule(moduleId, entityId) {
-    await set(ref(db, `schemas/${moduleId}/${entityId}`), null);
+    await db.ref(`schemas/${moduleId}/${entityId}`).remove();
     console.log(`✅ Entidade '${entityId}' removida do módulo '${moduleId}'.`);
 }
 
 async function saveEntityToModule(moduleId, entityId, entityName) {
     const path = `schemas/${moduleId}/${entityId}`;
-    const snapshot = await get(ref(db, path));
-    if (!snapshot.exists()) { await set(ref(db, path), { entityName, attributes: [] }); }
+    const snapshot = await db.ref(path).get();
+    if (!snapshot.exists()) { await db.ref(path).set({ entityName, attributes: [] }); }
 }
 
 function saveCurrentStructure() {
@@ -369,7 +371,7 @@ function saveCurrentStructure() {
     const fieldCards = document.getElementById('form-builder-dropzone').querySelectorAll('.form-field-card');
     const attributes = Array.from(fieldCards).map(card => JSON.parse(card.dataset.fieldData));
     const schema = { entityName: currentEntityName, attributes };
-    set(ref(db, `schemas/${currentModuleId}/${currentEntityId}`), schema)
+    db.ref(`schemas/${currentModuleId}/${currentEntityId}`).set(schema)
         .then(() => {
             Swal.fire({ icon: 'success', title: 'Guardado!', text: `A estrutura da entidade '${currentEntityName}' foi guardada.`, timer: 2000, showConfirmButton: false });
             closeModal();
@@ -381,7 +383,7 @@ function saveCurrentStructure() {
 }
 
 async function loadModuleStateFromFirebase() {
-     const snapshot = await get(ref(db, 'schemas'));
+     const snapshot = await db.ref('schemas').get();
      if (snapshot.exists()) {
         const schemas = snapshot.val();
         for (const moduleId in schemas) {
@@ -416,7 +418,7 @@ async function loadModuleStateFromFirebase() {
 }
 
 async function loadStructureForEntity(moduleId, entityId) {
-    const snapshot = await get(ref(db, `schemas/${moduleId}/${entityId}`));
+    const snapshot = await db.ref(`schemas/${moduleId}/${entityId}`).get();
     if (snapshot.exists()) {
         const schema = snapshot.val();
         if (schema.attributes && schema.attributes.length > 0) {
