@@ -11,7 +11,6 @@ const firebaseConfig = {
     storageBucket: "prototipoos.firebasestorage.app",
     messagingSenderId: "969276068015",
     appId: "1:969276068015:web:ef7d8c7bfc6f8d5104445a",
-    measurementId: "G-85EK8CECR5"
 };
 
 const app = initializeApp(firebaseConfig);
@@ -19,24 +18,20 @@ const db = getDatabase(app);
 
 // Evento que dispara quando o conteúdo HTML da página está pronto
 document.addEventListener('DOMContentLoaded', () => {
-    // Pega os parâmetros da URL
     const urlParams = new URLSearchParams(window.location.search);
-    const path = urlParams.get('path'); // ex: 'vendas/cliente'
+    const path = urlParams.get('path'); 
 
     if (!path) {
-        // Se não houver um caminho, mostra o ecrã de ajuda
         document.getElementById('view-container').style.display = 'none';
         document.getElementById('help-container').classList.remove('hidden');
     } else {
-        // Se houver um caminho, carrega e renderiza o formulário
         document.getElementById('help-container').style.display = 'none';
         document.getElementById('view-container').classList.remove('opacity-0');
         loadAndRenderForm(path);
     }
     
-    // Adiciona o listener para o botão de guardar
     document.getElementById('save-data-btn').addEventListener('click', (e) => {
-        e.preventDefault(); // Impede o comportamento padrão do formulário
+        e.preventDefault();
         if(path) {
             saveFormData(path);
         } else {
@@ -46,7 +41,7 @@ document.addEventListener('DOMContentLoaded', () => {
 });
 
 /**
- * Carrega o esquema (schema) do Firebase e constrói o formulário na página.
+ * Carrega o esquema e constrói o formulário na página.
  * @param {string} path - O caminho para o esquema, ex: 'vendas/cliente'
  */
 async function loadAndRenderForm(path) {
@@ -54,42 +49,66 @@ async function loadAndRenderForm(path) {
     const snapshot = await get(schemaRef);
 
     if (!snapshot.exists()) {
-        document.getElementById('form-title').textContent = "Erro 404";
-        document.getElementById('dynamic-form').innerHTML = `<p class="text-red-500">A estrutura para '${path}' não foi encontrada no banco de dados. Verifique o caminho na URL e se guardou a estrutura no construtor.</p>`;
-        document.getElementById('save-data-btn').disabled = true;
-        return;
+         document.getElementById('form-title').textContent = "Erro 404";
+         document.getElementById('dynamic-form').innerHTML = `<p class="text-red-500">A estrutura para '${path}' não foi encontrada. Verifique o caminho na URL e se guardou a estrutura no construtor.</p>`;
+         document.getElementById('save-data-btn').disabled = true;
+         return;
     }
     
     const schema = snapshot.val();
     document.getElementById('form-title').textContent = `Registo de ${schema.entityName}`;
     const formContainer = document.getElementById('dynamic-form');
-    formContainer.innerHTML = ''; // Limpa o container
+    formContainer.innerHTML = '';
 
-    // Itera sobre cada atributo e cria o HTML correspondente
     if (schema.attributes) {
-        schema.attributes.forEach(attr => {
-            const fieldHtml = createFieldHtml(attr);
-            formContainer.innerHTML += fieldHtml;
-        });
+        // Usa Promise.all para esperar que todos os campos, incluindo os de relacionamento, sejam criados.
+        const fieldPromises = schema.attributes.map(attr => createFieldHtml(attr));
+        const fieldHtmls = await Promise.all(fieldPromises);
+        formContainer.innerHTML = fieldHtmls.join('');
     } else {
-        formContainer.innerHTML = `<p class="text-slate-500">Esta entidade ainda não tem campos configurados. Volte ao construtor para adicionar alguns.</p>`;
+        formContainer.innerHTML = `<p class="text-slate-500">Esta entidade ainda não tem campos configurados.</p>`;
         document.getElementById('save-data-btn').disabled = true;
     }
 }
 
 /**
- * Cria o HTML para um único campo do formulário com base no seu tipo e propriedades.
+ * Cria o HTML para um único campo. Para relacionamentos, esta função é assíncrona.
  * @param {object} attr - O objeto de atributo do esquema.
- * @returns {string} - O HTML do campo.
+ * @returns {Promise<string>} - Uma promessa que resolve para o HTML do campo.
  */
-function createFieldHtml(attr) {
+async function createFieldHtml(attr) {
     const requiredLabel = attr.required ? '<span class="text-red-500">*</span>' : '';
     const baseInputClasses = "mt-1 block w-full px-3 py-2 bg-white border border-slate-300 rounded-md text-sm shadow-sm placeholder-slate-400 focus:outline-none focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500 disabled:bg-slate-50 disabled:text-slate-500 disabled:border-slate-200";
     
-    // Campo de label comum para a maioria dos tipos
     let field = `<div><label for="${attr.id}" class="block text-sm font-medium text-slate-700">${attr.label} ${requiredLabel}</label>`;
 
     switch(attr.type) {
+        case 'relationship':
+            field += `<select id="${attr.id}" name="${attr.id}" class="${baseInputClasses}" ${attr.required ? 'required' : ''}>`;
+            field += `<option value="">Carregando registos...</option>`;
+            
+            // Procura os dados da entidade relacionada em todos os módulos
+            const dataRef = ref(db, 'data');
+            const dataSnapshot = await get(dataRef);
+            if(dataSnapshot.exists()) {
+                const allData = dataSnapshot.val();
+                let optionsHtml = '';
+                for (const moduleId in allData) {
+                    if (allData[moduleId][attr.targetEntityId]) {
+                        const records = allData[moduleId][attr.targetEntityId];
+                        for(const recordId in records) {
+                            // Tenta encontrar um campo de nome óbvio para exibir na dropdown
+                            const recordData = records[recordId];
+                            const displayName = recordData.Nome || recordData.name || recordData.Título || recordData.titulo || recordData.Label || recordData.label || recordId;
+                            optionsHtml += `<option value="${recordId}">${displayName}</option>`;
+                        }
+                    }
+                }
+                field += optionsHtml;
+            }
+
+            field += `</select>`;
+            break;
         case 'textarea':
             field += `<textarea id="${attr.id}" name="${attr.label}" rows="4" class="${baseInputClasses}" placeholder="${attr.placeholder || ''}" ${attr.required ? 'required' : ''}></textarea>`;
             break;
@@ -102,18 +121,17 @@ function createFieldHtml(attr) {
             field += `</select>`;
             break;
         case 'checkbox':
-             // Checkbox tem uma estrutura de label diferente
              field = `
                 <div class="flex items-center">
                     <input id="${attr.id}" name="${attr.label}" type="checkbox" class="h-4 w-4 text-indigo-600 border-gray-300 rounded focus:ring-indigo-500">
                     <label for="${attr.id}" class="ml-2 block text-sm text-slate-900">${attr.label} ${requiredLabel}</label>
                 </div>
             `;
-            return field; // Retorna aqui porque a estrutura é completa
+            return field;
         case 'file':
             field += `<input type="file" id="${attr.id}" name="${attr.label}" class="${baseInputClasses} file:mr-4 file:py-2 file:px-4 file:rounded-full file:border-0 file:text-sm file:font-semibold file:bg-indigo-50 file:text-indigo-700 hover:file:bg-indigo-100">`;
             break;
-        default: // Cobre text, number, date, email, etc.
+        default:
             field += `<input type="${attr.type}" id="${attr.id}" name="${attr.label}" class="${baseInputClasses}" placeholder="${attr.placeholder || ''}" ${attr.required ? 'required' : ''}>`;
             break;
     }
@@ -128,16 +146,14 @@ function createFieldHtml(attr) {
  */
 function saveFormData(path) {
     const form = document.getElementById('dynamic-form');
-    // Validação do HTML5
     if (!form.checkValidity()) {
-        form.reportValidity(); // Mostra as mensagens de erro do navegador
+        form.reportValidity();
         return;
     }
 
     const formData = new FormData(form);
     const dataToSave = {};
     for (let [key, value] of formData.entries()) {
-        // Para checkboxes, o valor pode ser 'on' ou nada. Convertemos para booleano.
         const inputElement = form.querySelector(`[name="${key}"]`);
         if(inputElement.type === 'checkbox'){
             dataToSave[key] = inputElement.checked;
@@ -146,16 +162,15 @@ function saveFormData(path) {
         }
     }
     
-    // Guarda os dados num novo nó 'data/{path}/{id_unico}'
     const dataRef = ref(db, `data/${path}`);
     push(dataRef, dataToSave)
         .then(() => {
             Swal.fire({
                 icon: 'success',
                 title: 'Dados Guardados!',
-                text: 'O seu registo foi guardado com sucesso no banco de dados.',
+                text: 'O seu registo foi guardado com sucesso na base de dados.',
             });
-            form.reset(); // Limpa o formulário após guardar
+            form.reset();
         })
         .catch(error => {
             console.error("Erro ao guardar dados: ", error);
