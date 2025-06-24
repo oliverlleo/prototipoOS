@@ -16,13 +16,9 @@ let iconsAvailable = false;
 let allEntities = [];
 
 // ==== DADOS DE CONFIGURAÇÃO INICIAL ====
-const predefinedEntities = [
-    { id: 'cliente', name: 'Cliente', icon: 'user-round', predefined: true },
-    { id: 'proposta', name: 'Proposta', icon: 'file-text', predefined: true },
-    { id: 'produto', name: 'Produto', icon: 'package', predefined: true },
-    { id: 'chamado', name: 'Chamado', icon: 'phone', predefined: true },
-];
-const availableIcons = ['building', 'truck', 'dollar-sign', 'tag', 'shopping-cart', 'receipt', 'landmark', 'briefcase'];
+const availableEntityIcons = ['user-round', 'file-text', 'package', 'phone', 'building', 'truck', 'dollar-sign', 'tag', 'shopping-cart', 'receipt', 'landmark', 'briefcase'];
+const availableModuleIcons = ['briefcase', 'piggy-bank', 'users', 'bar-chart-2', 'settings'];
+
 const fieldTypes = [
     { type: 'text', name: 'Texto Curto', icon: 'type' },
     { type: 'textarea', name: 'Texto Longo', icon: 'pilcrow' },
@@ -32,7 +28,7 @@ const fieldTypes = [
     { type: 'checkbox', name: 'Caixa de Seleção', icon: 'check-square' },
     { type: 'select', name: 'Lista Suspensa', icon: 'chevron-down-square' },
     { type: 'file', name: 'Upload de Ficheiro', icon: 'upload-cloud' },
-    { type: 'relationship', name: 'Relacionamento (Sub-Tabela)', icon: 'link' },
+    { type: 'relationship', name: 'Tabela Aninhada', icon: 'link' },
 ];
 
 // ==== PONTO DE ENTRADA DA APLICAÇÃO ====
@@ -51,13 +47,11 @@ async function initApp() {
     }
     
     await loadAllEntities();
+    await loadAndRenderModules();
     
     populateFieldsToolbox();
-    setupDragAndDrop();
     setupEventListeners();
     
-    await loadModuleStateFromFirebase();
-
     const loadingOverlay = document.getElementById('loading-overlay');
     const appContainer = document.getElementById('app');
     loadingOverlay.style.display = 'none';
@@ -89,7 +83,8 @@ function renderEntityInLibrary(entity) {
     clone.querySelector('.entity-name').textContent = entity.name;
     
     if (!entity.predefined) {
-        clone.querySelector('.delete-custom-entity-btn').classList.remove('hidden');
+        const deleteBtn = clone.querySelector('.delete-custom-entity-btn');
+        deleteBtn.classList.remove('hidden');
     }
     
     list.appendChild(clone);
@@ -100,9 +95,9 @@ async function loadAllEntities() {
     console.log("📚 A carregar todas as entidades...");
     document.getElementById('entity-list').innerHTML = '';
     
-    allEntities = [...predefinedEntities];
+    allEntities = [];
     
-    const snapshot = await db.ref('custom_entities').get();
+    const snapshot = await db.ref('entities').get();
     if (snapshot.exists()) {
         const customEntities = snapshot.val();
         for (const entityId in customEntities) {
@@ -110,6 +105,9 @@ async function loadAllEntities() {
         }
     }
     allEntities.forEach(renderEntityInLibrary);
+    // Re-inicializa o drag-and-drop para a biblioteca de entidades
+    const entityList = document.getElementById('entity-list');
+    new Sortable(entityList, { group: { name: 'entities', pull: 'clone', put: false }, sort: false, animation: 150 });
 }
 
 
@@ -131,21 +129,12 @@ function populateFieldsToolbox() {
         toolbox.appendChild(clone);
     });
     tryCreateIcons();
+    new Sortable(fieldsToolbox, { group: { name: 'fields', pull: 'clone', put: false }, sort: false, animation: 150 });
 }
 
-function setupDragAndDrop() {
-    const entityList = document.getElementById('entity-list');
-    new Sortable(entityList, { group: { name: 'entities', pull: 'clone', put: false }, sort: false, animation: 150 });
-
-    document.querySelectorAll('.entities-dropzone').forEach(dropzone => {
-        new Sortable(dropzone, { group: 'entities', animation: 150, onAdd: handleEntityDrop });
-    });
-    
-    const fieldsToolbox = document.getElementById('fields-toolbox');
-     new Sortable(fieldsToolbox, { group: { name: 'fields', pull: 'clone', put: false }, sort: false, animation: 150 });
-    
-    const formBuilderDropzone = document.getElementById('form-builder-dropzone');
-    new Sortable(formBuilderDropzone, { group: 'fields', animation: 150, onAdd: handleFieldDrop, handle: '[data-lucide="grip-vertical"]' });
+function setupDragAndDropForModule(moduleElement) {
+    const dropzone = moduleElement.querySelector('.entities-dropzone');
+    new Sortable(dropzone, { group: 'entities', animation: 150, onAdd: handleEntityDrop });
 }
 
 function handleEntityDrop(event) {
@@ -251,6 +240,7 @@ function renderFormField(fieldData) {
     }
     dropzone.appendChild(clone);
     tryCreateIcons();
+    new Sortable(dropzone, { group: 'fields', animation: 150, handle: '[data-lucide="grip-vertical"]' });
 }
 
 function openModal(entityCard) {
@@ -276,14 +266,22 @@ function setupEventListeners() {
     document.body.addEventListener('click', e => {
         const configureBtn = e.target.closest('.configure-btn');
         if (configureBtn) { openModal(configureBtn.closest('.dropped-entity-card')); return; }
+
         const deleteEntityBtn = e.target.closest('.delete-entity-btn');
         if (deleteEntityBtn) { confirmAndRemoveEntityFromModule(deleteEntityBtn.closest('.dropped-entity-card')); return; }
+
         const deleteCustomEntityBtn = e.target.closest('.delete-custom-entity-btn');
         if (deleteCustomEntityBtn) { confirmAndRemoveCustomEntity(deleteCustomEntityBtn.closest('.entity-card')); return; }
+
+        const deleteModuleBtn = e.target.closest('.delete-module-btn');
+        if (deleteModuleBtn) { confirmAndRemoveModule(deleteModuleBtn.closest('.module-quadro')); return; }
     });
+
     document.getElementById('add-new-entity-btn').addEventListener('click', handleAddNewEntity);
+    document.getElementById('add-new-module-btn').addEventListener('click', handleAddNewModule);
     document.getElementById('close-modal-btn').addEventListener('click', closeModal);
     document.getElementById('save-structure-btn').addEventListener('click', saveCurrentStructure);
+
     document.getElementById('form-builder-dropzone').addEventListener('click', e => {
          const deleteBtn = e.target.closest('.delete-field-btn');
          if (deleteBtn) {
@@ -294,14 +292,14 @@ function setupEventListeners() {
 }
 
 async function handleAddNewEntity() {
-    const iconHtml = availableIcons.map(icon => `<button class="icon-picker-btn p-2 rounded-md hover:bg-indigo-100" data-icon="${icon}"><i data-lucide="${icon}"></i></button>`).join('');
+    const iconHtml = availableEntityIcons.map(icon => `<button class="icon-picker-btn p-2 rounded-md hover:bg-indigo-100" data-icon="${icon}"><i data-lucide="${icon}"></i></button>`).join('');
     const { value: formValues, isConfirmed } = await Swal.fire({
         title: 'Criar Nova Entidade',
-        html: `<input id="swal-input-name" class="swal2-input" placeholder="Nome da Entidade (ex: Fornecedor)"><p class="text-sm mt-4 mb-2">Escolha um ícone:</p><div id="swal-icon-grid" class="grid grid-cols-8 gap-2">${iconHtml}</div>`,
+        html: `<input id="swal-input-name" class="swal2-input" placeholder="Nome da Entidade (ex: Fornecedor)"><p class="text-sm mt-4 mb-2">Escolha um ícone:</p><div class="grid grid-cols-8 gap-2">${iconHtml}</div>`,
         focusConfirm: false,
         didOpen: () => {
             tryCreateIcons();
-            document.getElementById('swal-icon-grid').addEventListener('click', e => {
+            document.querySelector('#swal2-html-container').addEventListener('click', e => {
                 const button = e.target.closest('.icon-picker-btn');
                 if (button) {
                     document.querySelectorAll('.icon-picker-btn').forEach(btn => btn.classList.remove('bg-indigo-200'));
@@ -318,11 +316,36 @@ async function handleAddNewEntity() {
         }
     });
     if (isConfirmed && formValues) {
-        const newEntityData = { name: formValues.name, icon: formValues.icon, predefined: false };
-        const newEntityRef = db.ref('custom_entities').push();
+        const newEntityData = { name: formValues.name, icon: formValues.icon };
+        const newEntityRef = db.ref('entities').push();
         await newEntityRef.set(newEntityData);
         await loadAllEntities();
         Swal.fire('Criado!', 'A sua nova entidade está pronta para ser usada.', 'success');
+    }
+}
+
+async function handleAddNewModule() {
+    const { value: name, isConfirmed } = await Swal.fire({
+        title: 'Criar Novo Módulo',
+        input: 'text',
+        inputLabel: 'Nome do Módulo',
+        inputPlaceholder: 'Ex: Vendas, Recursos Humanos...',
+        showCancelButton: true,
+        confirmButtonText: 'Criar',
+        cancelButtonText: 'Cancelar',
+        inputValidator: (value) => {
+            if (!value) {
+                return 'O nome do módulo é obrigatório!'
+            }
+        }
+    });
+
+    if (isConfirmed && name) {
+        const newModuleRef = db.ref('modules').push();
+        const newModuleData = { id: newModuleRef.key, name };
+        await newModuleRef.set(newModuleData);
+        renderModule(newModuleData);
+        Swal.fire('Criado!', `O módulo '${name}' foi criado com sucesso.`, 'success');
     }
 }
 
@@ -337,7 +360,7 @@ function confirmAndRemoveCustomEntity(card) {
     Swal.fire({ title: `Eliminar Entidade '${entityName}'?`, text: `Isto irá remover a entidade da biblioteca e de todos os módulos onde foi usada. Esta ação é PERMANENTE.`, icon: 'error', showCancelButton: true, confirmButtonColor: '#d33', cancelButtonColor: '#3085d6', confirmButtonText: 'Sim, eliminar para sempre!', cancelButtonText: 'Cancelar' })
         .then(async result => {
             if (result.isConfirmed) {
-                await db.ref(`custom_entities/${entityId}`).remove();
+                await db.ref(`entities/${entityId}`).remove();
                 const snapshot = await db.ref('schemas').get();
                 if (snapshot.exists()) {
                     const updates = {};
@@ -352,6 +375,21 @@ function confirmAndRemoveCustomEntity(card) {
             }
         });
 }
+
+function confirmAndRemoveModule(moduleEl) {
+    const moduleId = moduleEl.dataset.moduleId;
+    const moduleName = moduleEl.querySelector('.module-title').textContent;
+    Swal.fire({ title: `Eliminar Módulo '${moduleName}'?`, text: `Isto irá remover o módulo e TODAS as entidades dentro dele. Esta ação é PERMANENTE.`, icon: 'error', showCancelButton: true, confirmButtonColor: '#d33', cancelButtonColor: '#3085d6', confirmButtonText: 'Sim, eliminar para sempre!', cancelButtonText: 'Cancelar' })
+        .then(async (result) => {
+            if (result.isConfirmed) {
+                await db.ref(`modules/${moduleId}`).remove();
+                await db.ref(`schemas/${moduleId}`).remove();
+                moduleEl.remove();
+                Swal.fire('Eliminado!', `O módulo '${moduleName}' foi eliminado permanentemente.`, 'success');
+            }
+        });
+}
+
 
 async function deleteEntityFromModule(moduleId, entityId) {
     await db.ref(`schemas/${moduleId}/${entityId}`).remove();
@@ -380,7 +418,34 @@ function saveCurrentStructure() {
         });
 }
 
-async function loadModuleStateFromFirebase() {
+function renderModule(moduleData) {
+    const container = document.getElementById('module-container');
+    const template = document.getElementById('module-template');
+    const clone = template.content.cloneNode(true);
+    const moduleEl = clone.querySelector('.module-quadro');
+    
+    moduleEl.dataset.moduleId = moduleData.id;
+    clone.querySelector('.module-title').textContent = moduleData.name;
+    
+    container.appendChild(clone);
+    const newModuleEl = container.querySelector(`[data-module-id="${moduleData.id}"]`);
+    setupDragAndDropForModule(newModuleEl);
+    tryCreateIcons();
+}
+
+async function loadAndRenderModules() {
+    const snapshot = await db.ref('modules').get();
+    if (snapshot.exists()) {
+        const modules = snapshot.val();
+        for (const moduleId in modules) {
+            renderModule({ ...modules[moduleId], id: moduleId });
+        }
+    }
+    // Carrega as entidades para dentro dos módulos renderizados
+    await loadDroppedEntitiesIntoModules();
+}
+
+async function loadDroppedEntitiesIntoModules() {
      const snapshot = await db.ref('schemas').get();
      if (snapshot.exists()) {
         const schemas = snapshot.val();
