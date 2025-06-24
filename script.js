@@ -424,6 +424,3 @@ async function loadStructureForEntity(moduleId, entityId) {
         }
     }
 }
-    </script>
-</body>
-</html>
