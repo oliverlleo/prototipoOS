@@ -102,6 +102,8 @@ function renderEntityInLibrary(entity) {
 
     card.dataset.entityId = entity.id;
     card.dataset.entityName = entity.name;
+    // CORREÇÃO: Guarda a informação do ícone diretamente no dataset do elemento.
+    card.dataset.entityIcon = entity.icon; 
     
     const iconEl = clone.querySelector('.entity-icon');
     if (iconsAvailable) {
@@ -112,7 +114,6 @@ function renderEntityInLibrary(entity) {
 
     clone.querySelector('.entity-name').textContent = entity.name;
     
-    // Mostra o botão de eliminar apenas para entidades personalizadas
     if (!entity.predefined) {
         const deleteBtn = clone.querySelector('.delete-custom-entity-btn');
         deleteBtn.classList.remove('hidden');
@@ -127,12 +128,10 @@ function renderEntityInLibrary(entity) {
  */
 async function loadAllEntities() {
     console.log("📚 A carregar todas as entidades...");
-    document.getElementById('entity-list').innerHTML = ''; // Limpa a lista
+    document.getElementById('entity-list').innerHTML = '';
     
-    // Renderiza as entidades predefinidas
     predefinedEntities.forEach(renderEntityInLibrary);
     
-    // Carrega e renderiza as entidades personalizadas
     const customEntitiesRef = ref(db, 'custom_entities');
     const snapshot = await get(customEntitiesRef);
     if (snapshot.exists()) {
@@ -202,6 +201,8 @@ function handleEntityDrop(event) {
     const { item, to } = event;
     const entityId = item.dataset.entityId;
     const entityName = item.dataset.entityName;
+    // CORREÇÃO: Obtém o ícone diretamente do dataset do item arrastado.
+    const entityIcon = item.dataset.entityIcon;
     const moduleEl = to.closest('.module-quadro');
     const moduleId = moduleEl.dataset.moduleId;
 
@@ -218,12 +219,10 @@ function handleEntityDrop(event) {
     card.dataset.entityName = entityName;
     card.dataset.moduleId = moduleId;
     
-    const allEntities = [...predefinedEntities, ...Object.values(document.querySelectorAll('#entity-list .entity-card')).map(c => c.dataset)];
-    const entityInfo = allEntities.find(e => e.id === entityId);
-    
     const iconEl = clone.querySelector('.entity-icon');
-    if (iconsAvailable && entityInfo) {
-       iconEl.setAttribute('data-lucide', entityInfo.icon || 'box');
+    if (iconsAvailable && entityIcon) {
+       // CORREÇÃO: Usa o ícone obtido do dataset.
+       iconEl.setAttribute('data-lucide', entityIcon);
     } else {
        iconEl.style.display = 'none';
     }
@@ -390,7 +389,7 @@ async function handleAddNewEntity() {
 
     if (isConfirmed && formValues) {
         const customEntitiesRef = ref(db, 'custom_entities');
-        const newEntityRef = push(customEntitiesRef); // Gera um ID único
+        const newEntityRef = push(customEntitiesRef);
         
         const newEntityData = {
             name: formValues.name,
@@ -419,19 +418,14 @@ function confirmAndRemoveCustomEntity(card) {
     const entityName = card.dataset.entityName;
     Swal.fire({ title: `Eliminar Entidade '${entityName}'?`, text: `Esta ação irá remover a entidade da biblioteca e de todos os módulos onde foi usada. Esta ação é PERMANENTE.`, icon: 'error', showCancelButton: true, confirmButtonColor: '#d33', cancelButtonColor: '#3085d6', confirmButtonText: 'Sim, eliminar para sempre!', cancelButtonText: 'Cancelar' }).then(async (result) => {
         if (result.isConfirmed) {
-            // Remove da base de dados de entidades personalizadas
             await remove(ref(db, `custom_entities/${entityId}`));
-            // Remove de todos os módulos onde possa ter sido usada
             const schemasRef = ref(db, 'schemas');
             const snapshot = await get(schemasRef);
             if (snapshot.exists()) {
-                const updates = {};
                 for (const moduleId in snapshot.val()) {
-                    updates[`/schemas/${moduleId}/${entityId}`] = null;
+                   await set(ref(db, `schemas/${moduleId}/${entityId}`), null);
                 }
-                await set(ref(db), { ...snapshot.val(), ...updates });
             }
-            // Remove da UI
             card.remove();
             document.querySelectorAll(`.dropped-entity-card[data-entity-id="${entityId}"]`).forEach(c => c.remove());
             Swal.fire('Eliminado!', `A entidade '${entityName}' foi eliminada permanentemente.`, 'success');
@@ -465,7 +459,7 @@ function saveCurrentStructure() {
     const attributes = Array.from(fieldCards).map(card => JSON.parse(card.dataset.fieldData));
     const schema = { entityName: currentEntityName, attributes };
     const dbRef = ref(db, `schemas/${currentModuleId}/${currentEntityId}`);
-    set(dbRef).then(() => {
+    set(dbRef, schema).then(() => {
         Swal.fire({ icon: 'success', title: 'Guardado!', text: `A estrutura da entidade '${currentEntityName}' foi guardada.`, timer: 2000, showConfirmButton: false });
         closeModal();
     }).catch(error => {
@@ -484,7 +478,14 @@ async function loadModuleStateFromFirebase() {
             if(moduleEl) {
                 const dropzone = moduleEl.querySelector('.entities-dropzone');
                 for(const entityId in schemas[moduleId]) {
-                    if (!schemas[moduleId][entityId]) continue; // Skip if null (deleted)
+                    if (!schemas[moduleId][entityId]) continue; 
+                    
+                    const allEntitiesSnapshot = await get(ref(db, 'custom_entities'));
+                    const allEntities = [...predefinedEntities, ...Object.entries(allEntitiesSnapshot.val() || {}).map(([id, data]) => ({...data, id}))];
+                    const entityInfo = allEntities.find(e => e.id === entityId);
+                    
+                    if (!entityInfo) continue;
+
                     const entityData = schemas[moduleId][entityId];
                     const template = document.getElementById('dropped-entity-card-template');
                     const clone = template.content.cloneNode(true);
@@ -492,9 +493,6 @@ async function loadModuleStateFromFirebase() {
                     card.dataset.entityId = entityId;
                     card.dataset.entityName = entityData.entityName;
                     card.dataset.moduleId = moduleId;
-                    
-                    const allEntities = [...predefinedEntities, ...Object.values(document.querySelectorAll('#entity-list .entity-card')).map(c => ({...c.dataset, icon: 'box'}))];
-                    const entityInfo = allEntities.find(e => e.id === entityId);
                     
                     const iconEl = clone.querySelector('.entity-icon');
                     if (iconsAvailable && entityInfo) {
