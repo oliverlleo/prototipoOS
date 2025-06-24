@@ -17,8 +17,6 @@ let allEntities = [];
 
 // ==== DADOS DE CONFIGURAÇÃO INICIAL ====
 const availableEntityIcons = ['user-round', 'file-text', 'package', 'phone', 'building', 'truck', 'dollar-sign', 'tag', 'shopping-cart', 'receipt', 'landmark', 'briefcase'];
-const availableModuleIcons = ['briefcase', 'piggy-bank', 'users', 'bar-chart-2', 'settings'];
-
 const fieldTypes = [
     { type: 'text', name: 'Texto Curto', icon: 'type' },
     { type: 'textarea', name: 'Texto Longo', icon: 'pilcrow' },
@@ -59,7 +57,9 @@ async function initApp() {
     console.log("👍 Aplicação pronta.");
 }
 
-window.onload = initApp;
+// O `defer` no tag <script> no HTML garante que o DOM está pronto.
+// Usamos o evento DOMContentLoaded como uma camada extra de segurança.
+document.addEventListener('DOMContentLoaded', initApp);
 
 // ---- Funções de Suporte ----
 function tryCreateIcons() { if (iconsAvailable) { lucide.createIcons(); } }
@@ -93,7 +93,8 @@ function renderEntityInLibrary(entity) {
 
 async function loadAllEntities() {
     console.log("📚 A carregar todas as entidades...");
-    document.getElementById('entity-list').innerHTML = '';
+    const list = document.getElementById('entity-list');
+    list.innerHTML = '';
     
     allEntities = [];
     
@@ -105,9 +106,7 @@ async function loadAllEntities() {
         }
     }
     allEntities.forEach(renderEntityInLibrary);
-    // Re-inicializa o drag-and-drop para a biblioteca de entidades
-    const entityList = document.getElementById('entity-list');
-    new Sortable(entityList, { group: { name: 'entities', pull: 'clone', put: false }, sort: false, animation: 150 });
+    new Sortable(list, { group: { name: 'entities', pull: 'clone', put: false }, sort: false, animation: 150 });
 }
 
 
@@ -129,7 +128,7 @@ function populateFieldsToolbox() {
         toolbox.appendChild(clone);
     });
     tryCreateIcons();
-    new Sortable(fieldsToolbox, { group: { name: 'fields', pull: 'clone', put: false }, sort: false, animation: 150 });
+    new Sortable(toolbox, { group: { name: 'fields', pull: 'clone', put: false }, sort: false, animation: 150 });
 }
 
 function setupDragAndDropForModule(moduleElement) {
@@ -263,6 +262,25 @@ function closeModal() {
 }
 
 function setupEventListeners() {
+    console.log("🎧 A configurar os listeners de eventos...");
+    
+    // Listener para o botão de adicionar módulo
+    const addModuleBtn = document.getElementById('add-new-module-btn');
+    if (addModuleBtn) {
+        addModuleBtn.addEventListener('click', handleAddNewModule);
+        console.log("✅ Listener para 'Adicionar Módulo' configurado.");
+    } else {
+        console.error("❌ Botão 'Adicionar Módulo' não encontrado!");
+    }
+
+    // Listener para o botão de adicionar entidade
+    document.getElementById('add-new-entity-btn').addEventListener('click', handleAddNewEntity);
+
+    // Listeners para os botões do modal de edição
+    document.getElementById('close-modal-btn').addEventListener('click', closeModal);
+    document.getElementById('save-structure-btn').addEventListener('click', saveCurrentStructure);
+
+    // Listeners delegados para botões que são criados dinamicamente
     document.body.addEventListener('click', e => {
         const configureBtn = e.target.closest('.configure-btn');
         if (configureBtn) { openModal(configureBtn.closest('.dropped-entity-card')); return; }
@@ -277,11 +295,6 @@ function setupEventListeners() {
         if (deleteModuleBtn) { confirmAndRemoveModule(deleteModuleBtn.closest('.module-quadro')); return; }
     });
 
-    document.getElementById('add-new-entity-btn').addEventListener('click', handleAddNewEntity);
-    document.getElementById('add-new-module-btn').addEventListener('click', handleAddNewModule);
-    document.getElementById('close-modal-btn').addEventListener('click', closeModal);
-    document.getElementById('save-structure-btn').addEventListener('click', saveCurrentStructure);
-
     document.getElementById('form-builder-dropzone').addEventListener('click', e => {
          const deleteBtn = e.target.closest('.delete-field-btn');
          if (deleteBtn) {
@@ -289,7 +302,9 @@ function setupEventListeners() {
                 .then(result => { if (result.isConfirmed) { deleteBtn.closest('.form-field-card').remove(); Swal.fire('Eliminado!', 'O campo foi removido.', 'success'); } });
          }
     });
+    console.log("👍 Todos os listeners de eventos foram configurados.");
 }
+
 
 async function handleAddNewEntity() {
     const iconHtml = availableEntityIcons.map(icon => `<button class="icon-picker-btn p-2 rounded-md hover:bg-indigo-100" data-icon="${icon}"><i data-lucide="${icon}"></i></button>`).join('');
