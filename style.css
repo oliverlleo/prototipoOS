@@ -1,0 +1,55 @@
+/* Import da fonte 'Inter' já está no HTML, então não é necessário aqui. */
+
+body {
+    font-family: 'Inter', sans-serif;
+    background-color: #f8fafc; /* Cor de fundo slate-50 do Tailwind */
+}
+
+/* Animação de fade-in para elementos que aparecem na tela */
+@keyframes fadeIn {
+    from {
+        opacity: 0;
+        transform: translateY(10px);
+    }
+    to {
+        opacity: 1;
+        transform: translateY(0);
+    }
+}
+
+.fade-in {
+    animation: fadeIn 0.5s ease-out forwards;
+}
+
+/* Estilo para o "fantasma" do item sendo arrastado com SortableJS */
+.sortable-ghost {
+    opacity: 0.4;
+    background-color: #c7d2fe; /* Cor indigo-200 do Tailwind */
+    border: 2px dashed #6366f1; /* Cor indigo-500 do Tailwind */
+}
+
+/* Garante que o item real sendo arrastado mantenha a opacidade total */
+.sortable-drag {
+    opacity: 1 !important;
+}
+
+/* Estilos para os itens na caixa de ferramentas (toolbox) */
+.toolbox-item {
+    cursor: grab; /* Indica que o item é arrastável */
+    transition: all 0.2s ease-in-out;
+}
+
+.toolbox-item:hover {
+    background-color: #e0e7ff; /* Cor indigo-100 do Tailwind */
+    color: #4338ca; /* Cor indigo-700 do Tailwind */
+    transform: scale(1.05); /* Efeito de zoom sutil ao passar o mouse */
+}
+
+/* Utilitário para esconder a barra de rolagem mas manter a rolagem funcional */
+.no-scrollbar::-webkit-scrollbar {
+    display: none; /* Chrome, Safari e Opera */
+}
+.no-scrollbar {
+    -ms-overflow-style: none;  /* IE e Edge */
+    scrollbar-width: none;  /* Firefox */
+}
