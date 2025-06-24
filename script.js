@@ -163,7 +163,6 @@ async function handleFieldDrop(event) {
     
     let modalHtml = `<input id="swal-input-label" class="swal2-input" placeholder="Nome do Campo (ex: Propostas do Cliente)">`;
     if (fieldType === 'relationship') {
-        // CORREÇÃO: Filtra a entidade atual da lista de opções para prevenir auto-relacionamento.
         const currentEntityId = document.getElementById('entity-builder-modal').dataset.currentEntityId;
         const availableEntities = allEntities.filter(e => e.id !== currentEntityId);
 
@@ -485,11 +484,6 @@ async function saveCurrentStructure() {
         await db.ref(`schemas/${currentModuleId}/${currentEntityId}`).set(schema);
         await Swal.fire({ icon: 'success', title: 'Guardado!', text: `A estrutura da entidade '${currentEntityName}' foi guardada.`, timer: 2000, showConfirmButton: false });
         
-        // CORREÇÃO: Força o recarregamento do modal atual para refletir as alterações e reassociar os eventos
-        const dropzone = document.getElementById('form-builder-dropzone');
-        dropzone.innerHTML = '';
-        await loadStructureForEntity(currentModuleId, currentEntityId);
-
     } catch (error) {
         Swal.fire({ icon: 'error', title: 'Oops...', text: 'Algo correu mal ao guardar a estrutura!' });
     }
