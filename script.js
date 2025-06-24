@@ -14,6 +14,7 @@ const firebaseConfig = {
 let db;
 let iconsAvailable = false;
 let allEntities = [];
+let modalNavigationStack = []; // NOVO: Pilha para gerir a navegação hierárquica
 
 // ==== DADOS DE CONFIGURAÇÃO INICIAL ====
 const availableEntityIcons = ['user-round', 'file-text', 'package', 'phone', 'building', 'truck', 'dollar-sign', 'tag', 'shopping-cart', 'receipt', 'landmark', 'briefcase'];
@@ -37,7 +38,6 @@ async function initApp() {
         firebase.initializeApp(firebaseConfig);
         db = firebase.database();
     } catch (error) {
-        console.error("❌ ERRO AO INICIALIZAR O FIREBASE:", error);
         document.getElementById('loading-overlay').innerHTML = 'Erro ao ligar à base de dados.';
         return;
     }
@@ -50,7 +50,6 @@ async function initApp() {
     
     document.getElementById('loading-overlay').style.display = 'none';
     document.getElementById('app').style.display = 'flex';
-    console.log("👍 Aplicação pronta.");
 }
 
 document.addEventListener('DOMContentLoaded', initApp);
@@ -68,17 +67,13 @@ function renderEntityInLibrary(entity) {
     card.dataset.entityIcon = entity.icon; 
     
     const iconEl = clone.querySelector('.entity-icon');
-    if (iconsAvailable) {
-        iconEl.setAttribute('data-lucide', entity.icon);
-    } else {
-        iconEl.style.display = 'none';
-    }
+    if (iconsAvailable) { iconEl.setAttribute('data-lucide', entity.icon); }
+    else { iconEl.style.display = 'none'; }
 
     clone.querySelector('.entity-name').textContent = entity.name;
     
     if (!entity.predefined) {
-        const deleteBtn = clone.querySelector('.delete-custom-entity-btn');
-        deleteBtn.classList.remove('hidden');
+        clone.querySelector('.delete-custom-entity-btn').classList.remove('hidden');
     }
     
     list.appendChild(clone);
@@ -109,11 +104,8 @@ function populateFieldsToolbox() {
         const item = clone.querySelector('.toolbox-item');
         item.dataset.fieldType = field.type;
         const iconEl = clone.querySelector('.field-icon');
-        if (iconsAvailable) {
-            iconEl.setAttribute('data-lucide', field.icon);
-        } else {
-            iconEl.style.display = 'none';
-        }
+        if (iconsAvailable) { iconEl.setAttribute('data-lucide', field.icon); }
+        else { iconEl.style.display = 'none'; }
         clone.querySelector('.field-name').textContent = field.name;
         toolbox.appendChild(clone);
     });
@@ -218,7 +210,8 @@ function renderFormField(fieldData) {
     const fieldInfo = fieldTypes.find(f => f.type === fieldData.type);
     
     const iconEl = clone.querySelector('.field-icon');
-    if (iconsAvailable) { iconEl.setAttribute('data-lucide', fieldInfo.icon); } else { iconEl.style.display = 'none'; }
+    if (iconsAvailable) { iconEl.setAttribute('data-lucide', fieldInfo.icon); } 
+    else { iconEl.style.display = 'none'; }
     
     const handleEl = clone.querySelector('[data-lucide="grip-vertical"]');
     if (!iconsAvailable) { handleEl.style.display = 'none'; }
@@ -227,7 +220,6 @@ function renderFormField(fieldData) {
     
     if (fieldData.type === 'relationship') {
         clone.querySelector('.field-type').textContent = `Tabela Aninhada -> ${fieldData.targetEntityName}`;
-        // NOVO: Mostra o botão para editar a sub-entidade
         const editSubEntityBtn = clone.querySelector('.edit-sub-entity-btn');
         editSubEntityBtn.classList.remove('hidden');
         editSubEntityBtn.dataset.targetEntityId = fieldData.targetEntityId;
@@ -239,12 +231,46 @@ function renderFormField(fieldData) {
     tryCreateIcons();
 }
 
+function updateModalBreadcrumb() {
+    const breadcrumbContainer = document.getElementById('modal-breadcrumb');
+    const backBtn = document.getElementById('modal-back-btn');
+    breadcrumbContainer.innerHTML = '';
+
+    if (modalNavigationStack.length === 0) {
+        backBtn.classList.add('hidden');
+        const modal = document.getElementById('entity-builder-modal');
+        const titleSpan = document.createElement('span');
+        titleSpan.className = 'font-bold';
+        titleSpan.textContent = `Editando: ${modal.dataset.currentEntityName}`;
+        breadcrumbContainer.appendChild(titleSpan);
+    } else {
+        backBtn.classList.remove('hidden');
+        modalNavigationStack.forEach((state, index) => {
+            const separator = document.createElement('span');
+            separator.className = 'mx-2 text-slate-400';
+            separator.textContent = '>';
+            breadcrumbContainer.appendChild(separator);
+
+            const nameSpan = document.createElement('span');
+            nameSpan.textContent = state.entityName;
+            breadcrumbContainer.appendChild(nameSpan);
+        });
+        const currentTitleSpan = document.createElement('span');
+        currentTitleSpan.className = 'font-bold';
+        const modal = document.getElementById('entity-builder-modal');
+        currentTitleSpan.textContent = `> ${modal.dataset.currentEntityName}`;
+        breadcrumbContainer.appendChild(currentTitleSpan);
+    }
+}
+
 function openModal(moduleId, entityId, entityName) {
     const modal = document.getElementById('entity-builder-modal');
-    document.getElementById('modal-title').textContent = `Editando a Entidade: ${entityName}`;
     modal.dataset.currentModuleId = moduleId;
     modal.dataset.currentEntityId = entityId;
     modal.dataset.currentEntityName = entityName;
+    
+    updateModalBreadcrumb();
+
     const dropzone = document.getElementById('form-builder-dropzone');
     dropzone.innerHTML = '';
     
@@ -258,7 +284,10 @@ function openModal(moduleId, entityId, entityName) {
 function closeModal() {
     const modal = document.getElementById('entity-builder-modal');
     modal.querySelector('.bg-white').classList.add('scale-95', 'opacity-0');
-    setTimeout(() => modal.classList.add('hidden'), 300);
+    setTimeout(() => {
+        modal.classList.add('hidden');
+        modalNavigationStack = []; // Limpa a pilha ao fechar
+    }, 300);
 }
 
 function setupEventListeners() {
@@ -269,26 +298,20 @@ function setupEventListeners() {
             openModal(card.dataset.moduleId, card.dataset.entityId, card.dataset.entityName);
             return;
         }
-
         const deleteEntityBtn = e.target.closest('.delete-entity-btn');
         if (deleteEntityBtn) { confirmAndRemoveEntityFromModule(deleteEntityBtn.closest('.dropped-entity-card')); return; }
-
         const deleteCustomEntityBtn = e.target.closest('.delete-custom-entity-btn');
         if (deleteCustomEntityBtn) { confirmAndRemoveCustomEntity(deleteCustomEntityBtn.closest('.entity-card')); return; }
-
         const deleteModuleBtn = e.target.closest('.delete-module-btn');
         if (deleteModuleBtn) { confirmAndRemoveModule(deleteModuleBtn.closest('.module-quadro')); return; }
-
-        // NOVO: Listener para o botão de editar sub-entidade
         const editSubEntityBtn = e.target.closest('.edit-sub-entity-btn');
         if (editSubEntityBtn) { handleEditSubEntity(editSubEntityBtn); return; }
     });
-
     document.getElementById('add-new-entity-btn').addEventListener('click', handleAddNewEntity);
     document.getElementById('add-new-module-btn').addEventListener('click', handleAddNewModule);
-
     document.getElementById('close-modal-btn').addEventListener('click', closeModal);
     document.getElementById('save-structure-btn').addEventListener('click', saveCurrentStructure);
+    document.getElementById('modal-back-btn').addEventListener('click', handleModalBack);
 
     document.getElementById('form-builder-dropzone').addEventListener('click', e => {
          const deleteBtn = e.target.closest('.delete-field-btn');
@@ -298,7 +321,6 @@ function setupEventListeners() {
          }
     });
 }
-
 
 async function handleAddNewEntity() {
     const iconHtml = availableEntityIcons.map(icon => `<button class="icon-picker-btn p-2 rounded-md hover:bg-indigo-100" data-icon="${icon}"><i data-lucide="${icon}"></i></button>`).join('');
@@ -354,36 +376,42 @@ async function handleAddNewModule() {
     }
 }
 
-// NOVO: Função para abrir o construtor da sub-entidade
 async function handleEditSubEntity(button) {
     const targetEntityId = button.dataset.targetEntityId;
-    const parentModuleId = document.getElementById('entity-builder-modal').dataset.currentModuleId;
+    const { currentModuleId, currentEntityId, currentEntityName } = document.getElementById('entity-builder-modal').dataset;
     const targetEntity = allEntities.find(e => e.id === targetEntityId);
 
     if (!targetEntity) {
         Swal.fire('Erro', 'Não foi possível encontrar a definição desta sub-entidade.', 'error');
         return;
     }
-
+    
+    // Adiciona o estado atual à pilha de navegação
+    modalNavigationStack.push({ moduleId: currentModuleId, entityId: currentEntityId, entityName: currentEntityName });
+    
     // Procura o módulo "real" desta entidade para garantir que guardamos a estrutura no sítio certo
     const schemasSnapshot = await db.ref('schemas').get();
-    let finalModuleId = parentModuleId; // Assume o módulo pai por defeito
+    let finalModuleId = currentModuleId; // Assume o módulo pai por defeito
     if (schemasSnapshot.exists()) {
         const schemas = schemasSnapshot.val();
         for (const modId in schemas) {
-            if (schemas[modId][targetEntityId]) {
+            if (schemas[modId] && schemas[modId][targetEntityId]) {
                 finalModuleId = modId;
                 break;
             }
         }
     }
-
-    closeModal();
-    // Usa um pequeno timeout para garantir que o primeiro modal fecha antes de abrir o segundo
-    setTimeout(() => {
-        openModal(finalModuleId, targetEntity.id, targetEntity.name);
-    }, 350);
+    
+    openModal(finalModuleId, targetEntity.id, targetEntity.name);
 }
+
+function handleModalBack() {
+    if (modalNavigationStack.length > 0) {
+        const parentState = modalNavigationStack.pop();
+        openModal(parentState.moduleId, parentState.entityId, parentState.entityName);
+    }
+}
+
 
 function confirmAndRemoveEntityFromModule(card) {
     const { entityName, moduleId, entityId } = card.dataset;
@@ -445,10 +473,9 @@ function saveCurrentStructure() {
     db.ref(`schemas/${currentModuleId}/${currentEntityId}`).set(schema)
         .then(() => {
             Swal.fire({ icon: 'success', title: 'Guardado!', text: `A estrutura da entidade '${currentEntityName}' foi guardada.`, timer: 2000, showConfirmButton: false });
-            closeModal();
+            // Não fecha nem volta automaticamente. Deixa o utilizador no controlo.
         })
         .catch(error => {
-            console.error("❌ Erro ao guardar no Firebase:", error);
             Swal.fire({ icon: 'error', title: 'Oops...', text: 'Algo correu mal ao guardar a estrutura!' });
         });
 }
@@ -487,6 +514,7 @@ async function loadDroppedEntitiesIntoModules() {
             const moduleEl = document.querySelector(`.module-quadro[data-module-id="${moduleId}"]`);
             if(moduleEl) {
                 const dropzone = moduleEl.querySelector('.entities-dropzone');
+                dropzone.innerHTML = ''; // Limpa antes de renderizar
                 for(const entityId in schemas[moduleId]) {
                     if (!schemas[moduleId][entityId]) continue;
                     const entityInfo = allEntities.find(e => e.id === entityId);
