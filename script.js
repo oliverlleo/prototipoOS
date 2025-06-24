@@ -14,7 +14,7 @@ const firebaseConfig = {
 let db;
 let iconsAvailable = false;
 let allEntities = [];
-let modalNavigationStack = []; // NOVO: Pilha para gerir a navegação hierárquica
+let modalNavigationStack = [];
 
 // ==== DADOS DE CONFIGURAÇÃO INICIAL ====
 const availableEntityIcons = ['user-round', 'file-text', 'package', 'phone', 'building', 'truck', 'dollar-sign', 'tag', 'shopping-cart', 'receipt', 'landmark', 'briefcase'];
@@ -235,32 +235,29 @@ function updateModalBreadcrumb() {
     const breadcrumbContainer = document.getElementById('modal-breadcrumb');
     const backBtn = document.getElementById('modal-back-btn');
     breadcrumbContainer.innerHTML = '';
-
-    if (modalNavigationStack.length === 0) {
+    
+    const fullStack = [...modalNavigationStack, document.getElementById('entity-builder-modal').dataset];
+    
+    if (fullStack.length <= 1) {
         backBtn.classList.add('hidden');
-        const modal = document.getElementById('entity-builder-modal');
-        const titleSpan = document.createElement('span');
-        titleSpan.className = 'font-bold';
-        titleSpan.textContent = `Editando: ${modal.dataset.currentEntityName}`;
-        breadcrumbContainer.appendChild(titleSpan);
     } else {
         backBtn.classList.remove('hidden');
-        modalNavigationStack.forEach((state, index) => {
+    }
+
+    fullStack.forEach((state, index) => {
+        const isLast = index === fullStack.length - 1;
+        const nameSpan = document.createElement('span');
+        nameSpan.textContent = state.currentEntityName || state.entityName;
+        nameSpan.className = isLast ? 'font-bold' : 'text-slate-500';
+        breadcrumbContainer.appendChild(nameSpan);
+
+        if (!isLast) {
             const separator = document.createElement('span');
             separator.className = 'mx-2 text-slate-400';
             separator.textContent = '>';
             breadcrumbContainer.appendChild(separator);
-
-            const nameSpan = document.createElement('span');
-            nameSpan.textContent = state.entityName;
-            breadcrumbContainer.appendChild(nameSpan);
-        });
-        const currentTitleSpan = document.createElement('span');
-        currentTitleSpan.className = 'font-bold';
-        const modal = document.getElementById('entity-builder-modal');
-        currentTitleSpan.textContent = `> ${modal.dataset.currentEntityName}`;
-        breadcrumbContainer.appendChild(currentTitleSpan);
-    }
+        }
+    });
 }
 
 function openModal(moduleId, entityId, entityName) {
@@ -286,7 +283,7 @@ function closeModal() {
     modal.querySelector('.bg-white').classList.add('scale-95', 'opacity-0');
     setTimeout(() => {
         modal.classList.add('hidden');
-        modalNavigationStack = []; // Limpa a pilha ao fechar
+        modalNavigationStack = [];
     }, 300);
 }
 
@@ -386,12 +383,10 @@ async function handleEditSubEntity(button) {
         return;
     }
     
-    // Adiciona o estado atual à pilha de navegação
     modalNavigationStack.push({ moduleId: currentModuleId, entityId: currentEntityId, entityName: currentEntityName });
     
-    // Procura o módulo "real" desta entidade para garantir que guardamos a estrutura no sítio certo
     const schemasSnapshot = await db.ref('schemas').get();
-    let finalModuleId = currentModuleId; // Assume o módulo pai por defeito
+    let finalModuleId = null;
     if (schemasSnapshot.exists()) {
         const schemas = schemasSnapshot.val();
         for (const modId in schemas) {
@@ -400,6 +395,12 @@ async function handleEditSubEntity(button) {
                 break;
             }
         }
+    }
+
+    if (!finalModuleId) {
+        Swal.fire('Erro', `A entidade '${targetEntity.name}' precisa de estar em pelo menos um módulo para ser editada.`, 'error');
+        modalNavigationStack.pop(); // Remove o estado que acabámos de adicionar
+        return;
     }
     
     openModal(finalModuleId, targetEntity.id, targetEntity.name);
@@ -473,7 +474,10 @@ function saveCurrentStructure() {
     db.ref(`schemas/${currentModuleId}/${currentEntityId}`).set(schema)
         .then(() => {
             Swal.fire({ icon: 'success', title: 'Guardado!', text: `A estrutura da entidade '${currentEntityName}' foi guardada.`, timer: 2000, showConfirmButton: false });
-            // Não fecha nem volta automaticamente. Deixa o utilizador no controlo.
+            // **A CORREÇÃO:** Recarrega a vista atual para garantir que os botões funcionam.
+            const dropzone = document.getElementById('form-builder-dropzone');
+            dropzone.innerHTML = '';
+            loadStructureForEntity(currentModuleId, currentEntityId);
         })
         .catch(error => {
             Swal.fire({ icon: 'error', title: 'Oops...', text: 'Algo correu mal ao guardar a estrutura!' });
