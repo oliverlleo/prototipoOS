@@ -31,15 +31,13 @@ const fieldTypes = [
 
 // ==== PONTO DE ENTRADA DA APLICAÇÃO ====
 async function initApp() {
-    console.log("🚀 A aplicação está a iniciar...");
     if (typeof lucide !== 'undefined' && lucide) { iconsAvailable = true; }
     
     try {
         firebase.initializeApp(firebaseConfig);
         db = firebase.database();
-        console.log("✅ Firebase inicializado.");
     } catch (error) {
-        console.error("❌ ERRO CRÍTICO AO INICIALIZAR O FIREBASE:", error);
+        console.error("❌ ERRO AO INICIALIZAR O FIREBASE:", error);
         document.getElementById('loading-overlay').innerHTML = 'Erro ao ligar à base de dados.';
         return;
     }
@@ -50,15 +48,11 @@ async function initApp() {
     populateFieldsToolbox();
     setupEventListeners();
     
-    const loadingOverlay = document.getElementById('loading-overlay');
-    const appContainer = document.getElementById('app');
-    loadingOverlay.style.display = 'none';
-    appContainer.style.display = 'flex';
+    document.getElementById('loading-overlay').style.display = 'none';
+    document.getElementById('app').style.display = 'flex';
     console.log("👍 Aplicação pronta.");
 }
 
-// O `defer` no tag <script> no HTML garante que o DOM está pronto.
-// Usamos o evento DOMContentLoaded como uma camada extra de segurança para iniciar a app.
 document.addEventListener('DOMContentLoaded', initApp);
 
 // ---- Funções de Suporte ----
@@ -82,7 +76,6 @@ function renderEntityInLibrary(entity) {
 
     clone.querySelector('.entity-name').textContent = entity.name;
     
-    // Mostra o botão de eliminar apenas para entidades personalizadas
     if (!entity.predefined) {
         const deleteBtn = clone.querySelector('.delete-custom-entity-btn');
         deleteBtn.classList.remove('hidden');
@@ -93,12 +86,9 @@ function renderEntityInLibrary(entity) {
 }
 
 async function loadAllEntities() {
-    console.log("📚 A carregar todas as entidades...");
     const list = document.getElementById('entity-list');
     list.innerHTML = '';
-    
     allEntities = [];
-    
     const snapshot = await db.ref('entities').get();
     if (snapshot.exists()) {
         const customEntities = snapshot.val();
@@ -107,17 +97,15 @@ async function loadAllEntities() {
         }
     }
     allEntities.forEach(renderEntityInLibrary);
-    // Re-inicializa o drag-and-drop para a biblioteca de entidades
     new Sortable(list, { group: { name: 'entities', pull: 'clone', put: false }, sort: false, animation: 150 });
 }
 
 
 function populateFieldsToolbox() {
     const toolbox = document.getElementById('fields-toolbox');
-    const template = document.getElementById('toolbox-field-template');
     toolbox.innerHTML = '';
     fieldTypes.forEach(field => {
-        const clone = template.content.cloneNode(true);
+        const clone = document.getElementById('toolbox-field-template').content.cloneNode(true);
         const item = clone.querySelector('.toolbox-item');
         item.dataset.fieldType = field.type;
         const iconEl = clone.querySelector('.field-icon');
@@ -130,7 +118,6 @@ function populateFieldsToolbox() {
         toolbox.appendChild(clone);
     });
     tryCreateIcons();
-    // Torna a toolbox arrastável
     new Sortable(toolbox, { group: { name: 'fields', pull: 'clone', put: false }, sort: false, animation: 150 });
 }
 
@@ -147,7 +134,7 @@ function handleEntityDrop(event) {
 
     if (moduleEl.querySelector(`.dropped-entity-card[data-entity-id="${entityId}"]`)) {
         item.remove();
-        Swal.fire({ icon: 'warning', title: 'Entidade já existe!', text: `A entidade '${entityName}' já foi adicionada a este módulo.`, timer: 2000, showConfirmButton: false });
+        Swal.fire({ icon: 'warning', title: 'Entidade já existe!', timer: 2000, showConfirmButton: false });
         return;
     }
     
@@ -170,8 +157,7 @@ function handleEntityDrop(event) {
     item.replaceWith(clone);
     tryCreateIcons();
 
-    const newCard = moduleEl.querySelector(`.dropped-entity-card[data-entity-id="${entityId}"]`);
-    setTimeout(() => newCard.classList.remove('animate-pulse'), 500);
+    setTimeout(() => document.querySelector(`.dropped-entity-card[data-entity-id="${entityId}"]`).classList.remove('animate-pulse'), 500);
     
     saveEntityToModule(moduleId, entityId, entityName);
 }
@@ -230,23 +216,31 @@ function renderFormField(fieldData) {
     card.dataset.fieldId = fieldData.id;
     card.dataset.fieldData = JSON.stringify(fieldData);
     const fieldInfo = fieldTypes.find(f => f.type === fieldData.type);
+    
     const iconEl = clone.querySelector('.field-icon');
     if (iconsAvailable) { iconEl.setAttribute('data-lucide', fieldInfo.icon); } else { iconEl.style.display = 'none'; }
+    
     const handleEl = clone.querySelector('[data-lucide="grip-vertical"]');
     if (!iconsAvailable) { handleEl.style.display = 'none'; }
+    
     clone.querySelector('.field-label').textContent = fieldData.label + (fieldData.required ? '*' : '');
+    
     if (fieldData.type === 'relationship') {
         clone.querySelector('.field-type').textContent = `Tabela Aninhada -> ${fieldData.targetEntityName}`;
+        // NOVO: Mostra o botão para editar a sub-entidade
+        const editSubEntityBtn = clone.querySelector('.edit-sub-entity-btn');
+        editSubEntityBtn.classList.remove('hidden');
+        editSubEntityBtn.dataset.targetEntityId = fieldData.targetEntityId;
     } else {
         clone.querySelector('.field-type').textContent = fieldInfo.name;
     }
+    
     dropzone.appendChild(clone);
     tryCreateIcons();
 }
 
-function openModal(entityCard) {
+function openModal(moduleId, entityId, entityName) {
     const modal = document.getElementById('entity-builder-modal');
-    const { entityId, entityName, moduleId } = entityCard.dataset;
     document.getElementById('modal-title').textContent = `Editando a Entidade: ${entityName}`;
     modal.dataset.currentModuleId = moduleId;
     modal.dataset.currentEntityId = entityId;
@@ -254,7 +248,6 @@ function openModal(entityCard) {
     const dropzone = document.getElementById('form-builder-dropzone');
     dropzone.innerHTML = '';
     
-    // CORREÇÃO: Inicializa o Sortable para o dropzone do formulário AQUI.
     new Sortable(dropzone, { group: 'fields', animation: 150, onAdd: handleFieldDrop, handle: '[data-lucide="grip-vertical"]' });
 
     loadStructureForEntity(moduleId, entityId);
@@ -269,11 +262,13 @@ function closeModal() {
 }
 
 function setupEventListeners() {
-    console.log("🎧 A configurar os listeners de eventos...");
-    
     document.body.addEventListener('click', e => {
         const configureBtn = e.target.closest('.configure-btn');
-        if (configureBtn) { openModal(configureBtn.closest('.dropped-entity-card')); return; }
+        if (configureBtn) {
+            const card = configureBtn.closest('.dropped-entity-card');
+            openModal(card.dataset.moduleId, card.dataset.entityId, card.dataset.entityName);
+            return;
+        }
 
         const deleteEntityBtn = e.target.closest('.delete-entity-btn');
         if (deleteEntityBtn) { confirmAndRemoveEntityFromModule(deleteEntityBtn.closest('.dropped-entity-card')); return; }
@@ -283,6 +278,10 @@ function setupEventListeners() {
 
         const deleteModuleBtn = e.target.closest('.delete-module-btn');
         if (deleteModuleBtn) { confirmAndRemoveModule(deleteModuleBtn.closest('.module-quadro')); return; }
+
+        // NOVO: Listener para o botão de editar sub-entidade
+        const editSubEntityBtn = e.target.closest('.edit-sub-entity-btn');
+        if (editSubEntityBtn) { handleEditSubEntity(editSubEntityBtn); return; }
     });
 
     document.getElementById('add-new-entity-btn').addEventListener('click', handleAddNewEntity);
@@ -298,7 +297,6 @@ function setupEventListeners() {
                 .then(result => { if (result.isConfirmed) { deleteBtn.closest('.form-field-card').remove(); Swal.fire('Eliminado!', 'O campo foi removido.', 'success'); } });
          }
     });
-    console.log("👍 Todos os listeners de eventos foram configurados.");
 }
 
 
@@ -344,11 +342,7 @@ async function handleAddNewModule() {
         showCancelButton: true,
         confirmButtonText: 'Criar',
         cancelButtonText: 'Cancelar',
-        inputValidator: (value) => {
-            if (!value) {
-                return 'O nome do módulo é obrigatório!'
-            }
-        }
+        inputValidator: (value) => { if (!value) { return 'O nome do módulo é obrigatório!' } }
     });
 
     if (isConfirmed && name) {
@@ -358,6 +352,37 @@ async function handleAddNewModule() {
         renderModule(newModuleData);
         Swal.fire('Criado!', `O módulo '${name}' foi criado com sucesso.`, 'success');
     }
+}
+
+// NOVO: Função para abrir o construtor da sub-entidade
+async function handleEditSubEntity(button) {
+    const targetEntityId = button.dataset.targetEntityId;
+    const parentModuleId = document.getElementById('entity-builder-modal').dataset.currentModuleId;
+    const targetEntity = allEntities.find(e => e.id === targetEntityId);
+
+    if (!targetEntity) {
+        Swal.fire('Erro', 'Não foi possível encontrar a definição desta sub-entidade.', 'error');
+        return;
+    }
+
+    // Procura o módulo "real" desta entidade para garantir que guardamos a estrutura no sítio certo
+    const schemasSnapshot = await db.ref('schemas').get();
+    let finalModuleId = parentModuleId; // Assume o módulo pai por defeito
+    if (schemasSnapshot.exists()) {
+        const schemas = schemasSnapshot.val();
+        for (const modId in schemas) {
+            if (schemas[modId][targetEntityId]) {
+                finalModuleId = modId;
+                break;
+            }
+        }
+    }
+
+    closeModal();
+    // Usa um pequeno timeout para garantir que o primeiro modal fecha antes de abrir o segundo
+    setTimeout(() => {
+        openModal(finalModuleId, targetEntity.id, targetEntity.name);
+    }, 350);
 }
 
 function confirmAndRemoveEntityFromModule(card) {
@@ -404,7 +429,6 @@ function confirmAndRemoveModule(moduleEl) {
 
 async function deleteEntityFromModule(moduleId, entityId) {
     await db.ref(`schemas/${moduleId}/${entityId}`).remove();
-    console.log(`✅ Entidade '${entityId}' removida do módulo '${moduleId}'.`);
 }
 
 async function saveEntityToModule(moduleId, entityId, entityName) {
