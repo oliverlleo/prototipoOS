@@ -58,7 +58,7 @@ async function initApp() {
 }
 
 // O `defer` no tag <script> no HTML garante que o DOM está pronto.
-// Usamos o evento DOMContentLoaded como uma camada extra de segurança.
+// Usamos o evento DOMContentLoaded como uma camada extra de segurança para iniciar a app.
 document.addEventListener('DOMContentLoaded', initApp);
 
 // ---- Funções de Suporte ----
@@ -82,6 +82,7 @@ function renderEntityInLibrary(entity) {
 
     clone.querySelector('.entity-name').textContent = entity.name;
     
+    // Mostra o botão de eliminar apenas para entidades personalizadas
     if (!entity.predefined) {
         const deleteBtn = clone.querySelector('.delete-custom-entity-btn');
         deleteBtn.classList.remove('hidden');
@@ -106,6 +107,7 @@ async function loadAllEntities() {
         }
     }
     allEntities.forEach(renderEntityInLibrary);
+    // Re-inicializa o drag-and-drop para a biblioteca de entidades
     new Sortable(list, { group: { name: 'entities', pull: 'clone', put: false }, sort: false, animation: 150 });
 }
 
@@ -128,6 +130,7 @@ function populateFieldsToolbox() {
         toolbox.appendChild(clone);
     });
     tryCreateIcons();
+    // Torna a toolbox arrastável
     new Sortable(toolbox, { group: { name: 'fields', pull: 'clone', put: false }, sort: false, animation: 150 });
 }
 
@@ -239,7 +242,6 @@ function renderFormField(fieldData) {
     }
     dropzone.appendChild(clone);
     tryCreateIcons();
-    new Sortable(dropzone, { group: 'fields', animation: 150, handle: '[data-lucide="grip-vertical"]' });
 }
 
 function openModal(entityCard) {
@@ -249,7 +251,12 @@ function openModal(entityCard) {
     modal.dataset.currentModuleId = moduleId;
     modal.dataset.currentEntityId = entityId;
     modal.dataset.currentEntityName = entityName;
-    document.getElementById('form-builder-dropzone').innerHTML = '';
+    const dropzone = document.getElementById('form-builder-dropzone');
+    dropzone.innerHTML = '';
+    
+    // CORREÇÃO: Inicializa o Sortable para o dropzone do formulário AQUI.
+    new Sortable(dropzone, { group: 'fields', animation: 150, onAdd: handleFieldDrop, handle: '[data-lucide="grip-vertical"]' });
+
     loadStructureForEntity(moduleId, entityId);
     modal.classList.remove('hidden');
     setTimeout(() => modal.querySelector('.bg-white').classList.remove('scale-95', 'opacity-0'), 10);
@@ -264,23 +271,6 @@ function closeModal() {
 function setupEventListeners() {
     console.log("🎧 A configurar os listeners de eventos...");
     
-    // Listener para o botão de adicionar módulo
-    const addModuleBtn = document.getElementById('add-new-module-btn');
-    if (addModuleBtn) {
-        addModuleBtn.addEventListener('click', handleAddNewModule);
-        console.log("✅ Listener para 'Adicionar Módulo' configurado.");
-    } else {
-        console.error("❌ Botão 'Adicionar Módulo' não encontrado!");
-    }
-
-    // Listener para o botão de adicionar entidade
-    document.getElementById('add-new-entity-btn').addEventListener('click', handleAddNewEntity);
-
-    // Listeners para os botões do modal de edição
-    document.getElementById('close-modal-btn').addEventListener('click', closeModal);
-    document.getElementById('save-structure-btn').addEventListener('click', saveCurrentStructure);
-
-    // Listeners delegados para botões que são criados dinamicamente
     document.body.addEventListener('click', e => {
         const configureBtn = e.target.closest('.configure-btn');
         if (configureBtn) { openModal(configureBtn.closest('.dropped-entity-card')); return; }
@@ -294,6 +284,12 @@ function setupEventListeners() {
         const deleteModuleBtn = e.target.closest('.delete-module-btn');
         if (deleteModuleBtn) { confirmAndRemoveModule(deleteModuleBtn.closest('.module-quadro')); return; }
     });
+
+    document.getElementById('add-new-entity-btn').addEventListener('click', handleAddNewEntity);
+    document.getElementById('add-new-module-btn').addEventListener('click', handleAddNewModule);
+
+    document.getElementById('close-modal-btn').addEventListener('click', closeModal);
+    document.getElementById('save-structure-btn').addEventListener('click', saveCurrentStructure);
 
     document.getElementById('form-builder-dropzone').addEventListener('click', e => {
          const deleteBtn = e.target.closest('.delete-field-btn');
@@ -456,7 +452,6 @@ async function loadAndRenderModules() {
             renderModule({ ...modules[moduleId], id: moduleId });
         }
     }
-    // Carrega as entidades para dentro dos módulos renderizados
     await loadDroppedEntitiesIntoModules();
 }
 
