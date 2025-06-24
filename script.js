@@ -163,7 +163,11 @@ async function handleFieldDrop(event) {
     
     let modalHtml = `<input id="swal-input-label" class="swal2-input" placeholder="Nome do Campo (ex: Propostas do Cliente)">`;
     if (fieldType === 'relationship') {
-        const entityOptions = allEntities.map(e => `<option value="${e.id}|${e.name}">${e.name}</option>`).join('');
+        // CORREÇÃO: Filtra a entidade atual da lista de opções para prevenir auto-relacionamento.
+        const currentEntityId = document.getElementById('entity-builder-modal').dataset.currentEntityId;
+        const availableEntities = allEntities.filter(e => e.id !== currentEntityId);
+
+        const entityOptions = availableEntities.map(e => `<option value="${e.id}|${e.name}">${e.name}</option>`).join('');
         modalHtml += `<p class="text-sm mt-4 mb-2">Mostrar uma tabela de qual entidade?</p><select id="swal-input-target-entity" class="swal2-select">${entityOptions}</select>`;
     } else {
         modalHtml += `<input id="swal-input-placeholder" class="swal2-input" placeholder="Texto de ajuda (opcional)">`;
@@ -186,7 +190,12 @@ async function handleFieldDrop(event) {
             }
             const baseData = { label, required: document.getElementById('swal-input-required').checked };
             if (fieldType === 'relationship') {
-                const [targetEntityId, targetEntityName] = document.getElementById('swal-input-target-entity').value.split('|');
+                const targetSelect = document.getElementById('swal-input-target-entity');
+                if (!targetSelect.value) {
+                    Swal.showValidationMessage('Não há outras entidades para se relacionar.');
+                    return false;
+                }
+                const [targetEntityId, targetEntityName] = targetSelect.value.split('|');
                 return { ...baseData, targetEntityId, targetEntityName };
             } else {
                 return { ...baseData, placeholder: document.getElementById('swal-input-placeholder').value, options: fieldType === 'select' ? document.getElementById('swal-input-options').value.split(',').map(s => s.trim()).filter(Boolean) : [] };
@@ -399,7 +408,7 @@ async function handleEditSubEntity(button) {
 
     if (!finalModuleId) {
         Swal.fire('Erro', `A entidade '${targetEntity.name}' precisa de estar em pelo menos um módulo para ser editada.`, 'error');
-        modalNavigationStack.pop(); // Remove o estado que acabámos de adicionar
+        modalNavigationStack.pop();
         return;
     }
     
@@ -466,23 +475,26 @@ async function saveEntityToModule(moduleId, entityId, entityName) {
     if (!snapshot.exists()) { await db.ref(path).set({ entityName, attributes: [] }); }
 }
 
-function saveCurrentStructure() {
+async function saveCurrentStructure() {
     const { currentModuleId, currentEntityId, currentEntityName } = document.getElementById('entity-builder-modal').dataset;
     const fieldCards = document.getElementById('form-builder-dropzone').querySelectorAll('.form-field-card');
     const attributes = Array.from(fieldCards).map(card => JSON.parse(card.dataset.fieldData));
     const schema = { entityName: currentEntityName, attributes };
-    db.ref(`schemas/${currentModuleId}/${currentEntityId}`).set(schema)
-        .then(() => {
-            Swal.fire({ icon: 'success', title: 'Guardado!', text: `A estrutura da entidade '${currentEntityName}' foi guardada.`, timer: 2000, showConfirmButton: false });
-            // **A CORREÇÃO:** Recarrega a vista atual para garantir que os botões funcionam.
-            const dropzone = document.getElementById('form-builder-dropzone');
-            dropzone.innerHTML = '';
-            loadStructureForEntity(currentModuleId, currentEntityId);
-        })
-        .catch(error => {
-            Swal.fire({ icon: 'error', title: 'Oops...', text: 'Algo correu mal ao guardar a estrutura!' });
-        });
+    
+    try {
+        await db.ref(`schemas/${currentModuleId}/${currentEntityId}`).set(schema);
+        await Swal.fire({ icon: 'success', title: 'Guardado!', text: `A estrutura da entidade '${currentEntityName}' foi guardada.`, timer: 2000, showConfirmButton: false });
+        
+        // CORREÇÃO: Força o recarregamento do modal atual para refletir as alterações e reassociar os eventos
+        const dropzone = document.getElementById('form-builder-dropzone');
+        dropzone.innerHTML = '';
+        await loadStructureForEntity(currentModuleId, currentEntityId);
+
+    } catch (error) {
+        Swal.fire({ icon: 'error', title: 'Oops...', text: 'Algo correu mal ao guardar a estrutura!' });
+    }
 }
+
 
 function renderModule(moduleData) {
     const container = document.getElementById('module-container');
@@ -518,7 +530,7 @@ async function loadDroppedEntitiesIntoModules() {
             const moduleEl = document.querySelector(`.module-quadro[data-module-id="${moduleId}"]`);
             if(moduleEl) {
                 const dropzone = moduleEl.querySelector('.entities-dropzone');
-                dropzone.innerHTML = ''; // Limpa antes de renderizar
+                dropzone.innerHTML = ''; 
                 for(const entityId in schemas[moduleId]) {
                     if (!schemas[moduleId][entityId]) continue;
                     const entityInfo = allEntities.find(e => e.id === entityId);
