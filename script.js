@@ -71,7 +71,6 @@ async function initApp() {
 window.onload = initApp;
 
 // ---- Funções de Suporte ----
-
 function tryCreateIcons() { if (iconsAvailable) { lucide.createIcons(); } }
 
 function renderEntityInLibrary(entity) {
@@ -260,23 +259,20 @@ function renderFormField(fieldData) {
 
 function openModal(entityCard) {
     const modal = document.getElementById('entity-builder-modal');
-    const modalContent = modal.querySelector('.bg-white');
-    const title = document.getElementById('modal-title');
     const { entityId, entityName, moduleId } = entityCard.dataset;
-    title.textContent = `Editando a Entidade: ${entityName}`;
+    document.getElementById('modal-title').textContent = `Editando a Entidade: ${entityName}`;
     modal.dataset.currentModuleId = moduleId;
     modal.dataset.currentEntityId = entityId;
     modal.dataset.currentEntityName = entityName;
     document.getElementById('form-builder-dropzone').innerHTML = '';
     loadStructureForEntity(moduleId, entityId);
     modal.classList.remove('hidden');
-    setTimeout(() => modalContent.classList.remove('scale-95', 'opacity-0'), 10);
+    setTimeout(() => modal.querySelector('.bg-white').classList.remove('scale-95', 'opacity-0'), 10);
 }
 
 function closeModal() {
     const modal = document.getElementById('entity-builder-modal');
-    const modalContent = modal.querySelector('.bg-white');
-    modalContent.classList.add('scale-95', 'opacity-0');
+    modal.querySelector('.bg-white').classList.add('scale-95', 'opacity-0');
     setTimeout(() => modal.classList.add('hidden'), 300);
 }
 
@@ -326,9 +322,8 @@ async function handleAddNewEntity() {
         }
     });
     if (isConfirmed && formValues) {
-        const customEntitiesRef = ref(db, 'custom_entities');
-        const newEntityRef = push(customEntitiesRef);
         const newEntityData = { name: formValues.name, icon: formValues.icon, predefined: false };
+        const newEntityRef = push(ref(db, 'custom_entities'));
         await set(newEntityRef, newEntityData);
         await loadAllEntities();
         Swal.fire('Criado!', 'A sua nova entidade está pronta para ser usada.', 'success');
@@ -429,3 +424,6 @@ async function loadStructureForEntity(moduleId, entityId) {
         }
     }
 }
+    </script>
+</body>
+</html>
