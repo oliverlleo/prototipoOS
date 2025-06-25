@@ -17,11 +17,13 @@ let allEntities = [];
 let modalNavigationStack = [];
 let mobileSidebarOpen = false;
 let modalSidebarOpen = false;
+let modulesOrder = []; // Armazena a ordem dos módulos
 
 // Variáveis para controle de dicas
 const TIPS_STATE = {
     WELCOME_TIP: 'welcomeTipClosed',
-    QUICK_TIP: 'quickTipClosed'
+    QUICK_TIP: 'quickTipClosed',
+    MODULES_TIP: 'modulesTipClosed'
 };
 
 // ==== DADOS DE CONFIGURAÇÃO INICIAL ====
@@ -140,9 +142,11 @@ function setupTips() {
     // Verifica o estado das dicas
     const welcomeTipClosed = localStorage.getItem(TIPS_STATE.WELCOME_TIP) === 'true';
     const quickTipClosed = localStorage.getItem(TIPS_STATE.QUICK_TIP) === 'true';
+    const modulesTipClosed = localStorage.getItem(TIPS_STATE.MODULES_TIP) === 'true';
     
     const welcomeTip = document.getElementById('welcome-tip');
     const quickTip = document.getElementById('quick-tip');
+    const modulesTip = document.getElementById('modules-tip');
     
     // Na primeira visita, mostra as dicas
     // Se o localStorage estiver vazio (primeira visita), mostra as dicas
@@ -155,6 +159,12 @@ function setupTips() {
     if (quickTip) {
         if (!quickTipClosed) {
             quickTip.classList.remove('hidden');
+        }
+    }
+    
+    if (modulesTip) {
+        if (!modulesTipClosed) {
+            modulesTip.classList.remove('hidden');
         }
     }
     
@@ -172,6 +182,8 @@ function setupTips() {
                     localStorage.setItem(TIPS_STATE.WELCOME_TIP, 'true');
                 } else if (tipId === 'quick-tip') {
                     localStorage.setItem(TIPS_STATE.QUICK_TIP, 'true');
+                } else if (tipId === 'modules-tip') {
+                    localStorage.setItem(TIPS_STATE.MODULES_TIP, 'true');
                 }
             }
         });
@@ -184,6 +196,7 @@ function setupTips() {
             // Mostra as dicas quando o botão de ajuda é clicado
             if (welcomeTip) welcomeTip.classList.remove('hidden');
             if (quickTip) quickTip.classList.remove('hidden');
+            if (modulesTip) modulesTip.classList.remove('hidden');
             
             // Exibe uma animação sutil para chamar atenção para as dicas
             if (welcomeTip) {
@@ -193,6 +206,10 @@ function setupTips() {
             if (quickTip) {
                 quickTip.classList.add('animate-pulse');
                 setTimeout(() => quickTip.classList.remove('animate-pulse'), 1000);
+            }
+            if (modulesTip) {
+                modulesTip.classList.add('animate-pulse');
+                setTimeout(() => modulesTip.classList.remove('animate-pulse'), 1000);
             }
         });
     }
@@ -1227,12 +1244,102 @@ async function loadAndRenderModules() {
     const snapshot = await db.ref('modules').get();
     if (snapshot.exists()) {
         const modules = snapshot.val();
-        for (const moduleId in modules) {
-            renderModule({ ...modules[moduleId], id: moduleId });
+        
+        // Verifica se há uma ordem personalizada salva
+        const orderSnapshot = await db.ref('modules_order').get();
+        if (orderSnapshot.exists()) {
+            modulesOrder = orderSnapshot.val();
+            
+            // Filtra IDs inválidos (módulos que não existem mais)
+            modulesOrder = modulesOrder.filter(id => modules[id]);
+            
+            // Adiciona quaisquer novos módulos que não estejam na ordem
+            Object.keys(modules).forEach(moduleId => {
+                if (!modulesOrder.includes(moduleId)) {
+                    modulesOrder.push(moduleId);
+                }
+            });
+        } else {
+            // Se não houver ordem personalizada, usa a ordem padrão
+            modulesOrder = Object.keys(modules);
         }
+        
+        // Renderiza os módulos na ordem salva
+        modulesOrder.forEach(moduleId => {
+            if (modules[moduleId]) { // Verifica se o módulo ainda existe
+                renderModule({ ...modules[moduleId], id: moduleId });
+            }
+        });
+    } else {
+        modulesOrder = [];
     }
+    
     await loadDroppedEntitiesIntoModules();
     checkEmptyStates();
+    
+    // Configurar Sortable para permitir reorganizar os módulos
+    const moduleContainer = document.getElementById('module-container');
+    if (moduleContainer) {
+        new Sortable(moduleContainer, {
+            animation: 150,
+            handle: '.module-quadro',
+            ghostClass: 'sortable-ghost',
+            chosenClass: 'sortable-chosen',
+            dragClass: 'sortable-drag',
+            delay: 150, // Delay para evitar arrastar acidentalmente em dispositivos móveis
+            delayOnTouchOnly: true,
+            onEnd: function(evt) {
+                saveModulesOrder();
+            }
+        });
+    }
+}
+
+/**
+ * Salva a ordem atual dos módulos no Firebase
+ */
+async function saveModulesOrder() {
+    try {
+        // Obter a ordem atual dos módulos
+        const moduleElements = document.querySelectorAll('.module-quadro');
+        const newOrder = Array.from(moduleElements).map(el => el.dataset.moduleId);
+        
+        // Atualiza a variável global
+        modulesOrder = newOrder;
+        
+        // Salva no Firebase
+        await db.ref('modules_order').set(newOrder);
+        
+        // Feedback visual
+        const Toast = Swal.mixin({
+            toast: true,
+            position: 'bottom-end',
+            showConfirmButton: false,
+            timer: 2000,
+            timerProgressBar: true,
+            customClass: {
+                popup: 'shadow-xl rounded-xl'
+            }
+        });
+        
+        Toast.fire({
+            icon: 'success',
+            title: 'Ordem dos módulos atualizada!'
+        });
+    } catch (error) {
+        console.error("Erro ao salvar ordem dos módulos:", error);
+        // Feedback de erro opcional
+        Swal.fire({
+            icon: 'error',
+            title: 'Erro',
+            text: 'Ocorreu um erro ao salvar a ordem dos módulos.',
+            timer: 2000,
+            showConfirmButton: false,
+            customClass: {
+                popup: 'shadow-xl rounded-xl'
+            }
+        });
+    }
 }
 
 async function loadDroppedEntitiesIntoModules() {
