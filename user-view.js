@@ -18,6 +18,11 @@ const db = getDatabase(app);
 
 // Evento que dispara quando o conteúdo HTML da página está pronto
 document.addEventListener('DOMContentLoaded', () => {
+    // Inicializa ícones
+    if (typeof lucide !== 'undefined' && lucide) {
+        lucide.createIcons();
+    }
+    
     const urlParams = new URLSearchParams(window.location.search);
     const path = urlParams.get('path'); 
 
@@ -26,7 +31,12 @@ document.addEventListener('DOMContentLoaded', () => {
         document.getElementById('help-container').classList.remove('hidden');
     } else {
         document.getElementById('help-container').style.display = 'none';
-        document.getElementById('view-container').classList.remove('opacity-0');
+        
+        // Anima a transição de entrada
+        setTimeout(() => {
+            document.getElementById('view-container').classList.remove('opacity-0');
+        }, 100);
+        
         loadAndRenderForm(path);
     }
     
@@ -35,7 +45,14 @@ document.addEventListener('DOMContentLoaded', () => {
         if(path) {
             saveFormData(path);
         } else {
-            Swal.fire('Erro', 'Nenhum caminho de entidade especificado para guardar os dados.', 'error');
+            Swal.fire({
+                icon: 'error',
+                title: 'Erro',
+                text: 'Nenhum caminho de entidade especificado para guardar os dados.',
+                customClass: {
+                    popup: 'shadow-xl rounded-xl'
+                }
+            });
         }
     });
 });
@@ -45,29 +62,85 @@ document.addEventListener('DOMContentLoaded', () => {
  * @param {string} path - O caminho para o esquema, ex: 'vendas/cliente'
  */
 async function loadAndRenderForm(path) {
-    const schemaRef = ref(db, `schemas/${path}`);
-    const snapshot = await get(schemaRef);
+    try {
+        const [moduleId, entityId] = path.split('/');
+        if (!moduleId || !entityId) {
+            throw new Error('Caminho inválido');
+        }
+        
+        const schemaRef = ref(db, `schemas/${moduleId}/${entityId}`);
+        const snapshot = await get(schemaRef);
+        
+        if (!snapshot.exists()) {
+            document.getElementById('form-loading').innerHTML = `
+                <div class="bg-red-100 p-3 rounded-full text-red-600 mb-3">
+                    <i data-lucide="x-circle" class="h-8 w-8"></i>
+                </div>
+                <h3 class="text-lg font-semibold text-red-700 mb-1">Estrutura não encontrada</h3>
+                <p class="text-slate-600">A estrutura para '${path}' não existe. Verifique o caminho na URL e certifique-se de ter salvo a estrutura no construtor.</p>
+            `;
+            
+            if (typeof lucide !== 'undefined' && lucide) {
+                lucide.createIcons();
+            }
+            
+            document.getElementById('form-title').textContent = "Erro 404";
+            document.getElementById('save-data-btn').disabled = true;
+            document.getElementById('save-data-btn').classList.add('opacity-50', 'cursor-not-allowed');
+            return;
+        }
+        
+        const schema = snapshot.val();
+        document.getElementById('form-title').textContent = `Formulário de ${schema.entityName}`;
+        document.getElementById('dynamic-form').innerHTML = '';
 
-    if (!snapshot.exists()) {
-         document.getElementById('form-title').textContent = "Erro 404";
-         document.getElementById('dynamic-form').innerHTML = `<p class="text-red-500">A estrutura para '${path}' não foi encontrada. Verifique o caminho na URL e se guardou a estrutura no construtor.</p>`;
-         document.getElementById('save-data-btn').disabled = true;
-         return;
-    }
-    
-    const schema = snapshot.val();
-    document.getElementById('form-title').textContent = `Registo de ${schema.entityName}`;
-    const formContainer = document.getElementById('dynamic-form');
-    formContainer.innerHTML = '';
-
-    if (schema.attributes) {
+        if (!schema.attributes || schema.attributes.length === 0) {
+            document.getElementById('dynamic-form').innerHTML = `
+                <div class="bg-amber-50 border border-amber-200 rounded-lg p-5 text-center">
+                    <div class="bg-amber-100 p-3 rounded-full inline-flex items-center justify-center text-amber-600 mb-3">
+                        <i data-lucide="alert-triangle" class="h-6 w-6"></i>
+                    </div>
+                    <h3 class="text-lg font-semibold text-amber-800 mb-1">Formulário vazio</h3>
+                    <p class="text-amber-700">Esta entidade ainda não tem campos configurados. Volte ao construtor para adicionar campos.</p>
+                </div>
+            `;
+            
+            if (typeof lucide !== 'undefined' && lucide) {
+                lucide.createIcons();
+            }
+            
+            document.getElementById('save-data-btn').disabled = true;
+            document.getElementById('save-data-btn').classList.add('opacity-50', 'cursor-not-allowed');
+            return;
+        }
+        
         // Usa Promise.all para esperar que todos os campos, incluindo os de relacionamento, sejam criados.
         const fieldPromises = schema.attributes.map(attr => createFieldHtml(attr));
         const fieldHtmls = await Promise.all(fieldPromises);
-        formContainer.innerHTML = fieldHtmls.join('');
-    } else {
-        formContainer.innerHTML = `<p class="text-slate-500">Esta entidade ainda não tem campos configurados.</p>`;
+        document.getElementById('dynamic-form').innerHTML = fieldHtmls.join('');
+        
+        if (typeof lucide !== 'undefined' && lucide) {
+            lucide.createIcons();
+        }
+        
+    } catch (error) {
+        console.error("Erro ao carregar formulário:", error);
+        document.getElementById('dynamic-form').innerHTML = `
+            <div class="bg-red-50 border border-red-200 rounded-lg p-5 text-center">
+                <div class="bg-red-100 p-3 rounded-full inline-flex items-center justify-center text-red-600 mb-3">
+                    <i data-lucide="alert-circle" class="h-6 w-6"></i>
+                </div>
+                <h3 class="text-lg font-semibold text-red-800 mb-1">Erro ao carregar formulário</h3>
+                <p class="text-red-700">${error.message || 'Ocorreu um erro inesperado. Tente novamente mais tarde.'}</p>
+            </div>
+        `;
+        
+        if (typeof lucide !== 'undefined' && lucide) {
+            lucide.createIcons();
+        }
+        
         document.getElementById('save-data-btn').disabled = true;
+        document.getElementById('save-data-btn').classList.add('opacity-50', 'cursor-not-allowed');
     }
 }
 
@@ -77,67 +150,161 @@ async function loadAndRenderForm(path) {
  * @returns {Promise<string>} - Uma promessa que resolve para o HTML do campo.
  */
 async function createFieldHtml(attr) {
-    const requiredLabel = attr.required ? '<span class="text-red-500">*</span>' : '';
-    const baseInputClasses = "mt-1 block w-full px-3 py-2 bg-white border border-slate-300 rounded-md text-sm shadow-sm placeholder-slate-400 focus:outline-none focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500 disabled:bg-slate-50 disabled:text-slate-500 disabled:border-slate-200";
+    const requiredLabel = attr.required ? '<span class="text-red-500 ml-1">*</span>' : '';
+    const baseInputClasses = "mt-1 block w-full px-3 py-2 bg-white border border-slate-300 rounded-lg text-sm shadow-sm placeholder-slate-400 focus:outline-none focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500 disabled:bg-slate-50 disabled:text-slate-500 disabled:border-slate-200";
     
-    let field = `<div><label for="${attr.id}" class="block text-sm font-medium text-slate-700">${attr.label} ${requiredLabel}</label>`;
+    let field = `<div class="bg-white p-4 rounded-lg border border-slate-200 shadow-sm">`;
+    
+    if (attr.type === 'checkbox') {
+        field += `
+            <div class="flex items-center">
+                <input id="${attr.id}" name="${attr.label}" type="checkbox" class="h-4 w-4 text-indigo-600 border-gray-300 rounded focus:ring-indigo-500">
+                <label for="${attr.id}" class="ml-2 block text-sm font-medium text-slate-700">${attr.label} ${requiredLabel}</label>
+            </div>
+        `;
+    } else {
+        field += `<label for="${attr.id}" class="block text-sm font-medium text-slate-700 mb-1 flex items-center">
+            <i data-lucide="${getIconForFieldType(attr.type)}" class="h-4 w-4 text-indigo-500 mr-1.5"></i>
+            ${attr.label} ${requiredLabel}
+        </label>`;
 
-    switch(attr.type) {
-        case 'relationship':
-            field += `<select id="${attr.id}" name="${attr.id}" class="${baseInputClasses}" ${attr.required ? 'required' : ''}>`;
-            field += `<option value="">Carregando registos...</option>`;
-            
-            // Procura os dados da entidade relacionada em todos os módulos
-            const dataRef = ref(db, 'data');
-            const dataSnapshot = await get(dataRef);
-            if(dataSnapshot.exists()) {
-                const allData = dataSnapshot.val();
-                let optionsHtml = '';
-                for (const moduleId in allData) {
-                    if (allData[moduleId][attr.targetEntityId]) {
-                        const records = allData[moduleId][attr.targetEntityId];
-                        for(const recordId in records) {
-                            // Tenta encontrar um campo de nome óbvio para exibir na dropdown
-                            const recordData = records[recordId];
-                            const displayName = recordData.Nome || recordData.name || recordData.Título || recordData.titulo || recordData.Label || recordData.label || recordId;
-                            optionsHtml += `<option value="${recordId}">${displayName}</option>`;
+        switch(attr.type) {
+            case 'relationship':
+                field += `<select id="${attr.id}" name="${attr.id}" class="${baseInputClasses}" ${attr.required ? 'required' : ''}>`;
+                field += `<option value="">Selecione uma opção...</option>`;
+                
+                // Procura os dados da entidade relacionada em todos os módulos
+                try {
+                    const dataRef = ref(db, 'data');
+                    const dataSnapshot = await get(dataRef);
+                    if(dataSnapshot.exists()) {
+                        const allData = dataSnapshot.val();
+                        let optionsHtml = '';
+                        let hasOptions = false;
+                        
+                        for (const moduleId in allData) {
+                            if (allData[moduleId][attr.targetEntityId]) {
+                                const records = allData[moduleId][attr.targetEntityId];
+                                for(const recordId in records) {
+                                    // Tenta encontrar um campo de nome óbvio para exibir na dropdown
+                                    const recordData = records[recordId];
+                                    const displayName = recordData.Nome || recordData.name || recordData.Título || recordData.titulo || recordData.Label || recordData.label || recordId;
+                                    optionsHtml += `<option value="${recordId}">${displayName}</option>`;
+                                    hasOptions = true;
+                                }
+                            }
                         }
+                        
+                        if (!hasOptions) {
+                            optionsHtml = `<option value="" disabled>Nenhum registro encontrado</option>`;
+                        }
+                        
+                        field += optionsHtml;
                     }
+                } catch (error) {
+                    console.error("Erro ao carregar dados relacionados:", error);
+                    field += `<option value="" disabled>Erro ao carregar opções</option>`;
                 }
-                field += optionsHtml;
-            }
 
-            field += `</select>`;
-            break;
-        case 'textarea':
-            field += `<textarea id="${attr.id}" name="${attr.label}" rows="4" class="${baseInputClasses}" placeholder="${attr.placeholder || ''}" ${attr.required ? 'required' : ''}></textarea>`;
-            break;
-        case 'select':
-            field += `<select id="${attr.id}" name="${attr.label}" class="${baseInputClasses}" ${attr.required ? 'required' : ''}>`;
-            field += `<option value="">${attr.placeholder || 'Selecione...'}</option>`;
-            (attr.options || []).forEach(opt => {
-                field += `<option value="${opt}">${opt}</option>`;
-            });
-            field += `</select>`;
-            break;
-        case 'checkbox':
-             field = `
-                <div class="flex items-center">
-                    <input id="${attr.id}" name="${attr.label}" type="checkbox" class="h-4 w-4 text-indigo-600 border-gray-300 rounded focus:ring-indigo-500">
-                    <label for="${attr.id}" class="ml-2 block text-sm text-slate-900">${attr.label} ${requiredLabel}</label>
-                </div>
-            `;
-            return field;
-        case 'file':
-            field += `<input type="file" id="${attr.id}" name="${attr.label}" class="${baseInputClasses} file:mr-4 file:py-2 file:px-4 file:rounded-full file:border-0 file:text-sm file:font-semibold file:bg-indigo-50 file:text-indigo-700 hover:file:bg-indigo-100">`;
-            break;
-        default:
-            field += `<input type="${attr.type}" id="${attr.id}" name="${attr.label}" class="${baseInputClasses}" placeholder="${attr.placeholder || ''}" ${attr.required ? 'required' : ''}>`;
-            break;
+                field += `</select>`;
+                break;
+                
+            case 'textarea':
+                field += `<textarea id="${attr.id}" name="${attr.label}" rows="4" class="${baseInputClasses}" placeholder="${attr.placeholder || ''}" ${attr.required ? 'required' : ''}></textarea>`;
+                break;
+                
+            case 'select':
+                field += `<select id="${attr.id}" name="${attr.label}" class="${baseInputClasses}" ${attr.required ? 'required' : ''}>`;
+                field += `<option value="">${attr.placeholder || 'Selecione...'}</option>`;
+                (attr.options || []).forEach(opt => {
+                    field += `<option value="${opt}">${opt}</option>`;
+                });
+                field += `</select>`;
+                break;
+                
+            case 'file':
+                field += `
+                    <div class="mt-1 flex items-center">
+                        <label for="${attr.id}" class="cursor-pointer flex items-center gap-2 px-4 py-2 bg-indigo-50 text-indigo-700 rounded-lg hover:bg-indigo-100 transition-colors">
+                            <i data-lucide="upload-cloud" class="h-5 w-5"></i>
+                            <span>Escolher Arquivo</span>
+                        </label>
+                        <span id="${attr.id}-filename" class="ml-3 text-sm text-slate-500">Nenhum arquivo selecionado</span>
+                        <input type="file" id="${attr.id}" name="${attr.label}" class="hidden" ${attr.required ? 'required' : ''} onchange="document.getElementById('${attr.id}-filename').textContent = this.files[0]?.name || 'Nenhum arquivo selecionado'">
+                    </div>
+                `;
+                break;
+                
+            case 'date':
+                field += `
+                    <div class="relative mt-1">
+                        <div class="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none text-slate-400">
+                            <i data-lucide="calendar" class="h-5 w-5"></i>
+                        </div>
+                        <input type="${attr.type}" id="${attr.id}" name="${attr.label}" class="${baseInputClasses} pl-10" placeholder="${attr.placeholder || ''}" ${attr.required ? 'required' : ''}>
+                    </div>
+                `;
+                break;
+                
+            case 'email':
+                field += `
+                    <div class="relative mt-1">
+                        <div class="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none text-slate-400">
+                            <i data-lucide="at-sign" class="h-5 w-5"></i>
+                        </div>
+                        <input type="${attr.type}" id="${attr.id}" name="${attr.label}" class="${baseInputClasses} pl-10" placeholder="${attr.placeholder || ''}" ${attr.required ? 'required' : ''}>
+                    </div>
+                `;
+                break;
+                
+            case 'number':
+                field += `
+                    <div class="relative mt-1">
+                        <div class="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none text-slate-400">
+                            <i data-lucide="hash" class="h-5 w-5"></i>
+                        </div>
+                        <input type="${attr.type}" id="${attr.id}" name="${attr.label}" class="${baseInputClasses} pl-10" placeholder="${attr.placeholder || ''}" ${attr.required ? 'required' : ''}>
+                    </div>
+                `;
+                break;
+                
+            default:
+                field += `
+                    <div class="relative mt-1">
+                        <div class="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none text-slate-400">
+                            <i data-lucide="${getIconForFieldType(attr.type)}" class="h-5 w-5"></i>
+                        </div>
+                        <input type="${attr.type}" id="${attr.id}" name="${attr.label}" class="${baseInputClasses} pl-10" placeholder="${attr.placeholder || ''}" ${attr.required ? 'required' : ''}>
+                    </div>
+                `;
+                break;
+        }
     }
     
     field += `</div>`;
     return field;
+}
+
+/**
+ * Retorna o ícone apropriado para o tipo de campo
+ * @param {string} fieldType - O tipo de campo
+ * @returns {string} - O nome do ícone
+ */
+function getIconForFieldType(fieldType) {
+    const iconMap = {
+        'text': 'type',
+        'textarea': 'pilcrow',
+        'number': 'hash',
+        'date': 'calendar',
+        'email': 'at-sign',
+        'checkbox': 'check-square',
+        'select': 'chevron-down-square',
+        'file': 'upload-cloud',
+        'sub-entity': 'table-2',
+        'relationship': 'link'
+    };
+    
+    return iconMap[fieldType] || 'circle';
 }
 
 /**
@@ -151,16 +318,34 @@ function saveFormData(path) {
         return;
     }
 
+    // Mostra loading durante o salvamento
+    Swal.fire({
+        title: 'Guardando dados...',
+        text: 'Por favor, aguarde...',
+        allowOutsideClick: false,
+        didOpen: () => {
+            Swal.showLoading();
+        }
+    });
+
     const formData = new FormData(form);
     const dataToSave = {};
+    
     for (let [key, value] of formData.entries()) {
         const inputElement = form.querySelector(`[name="${key}"]`);
         if(inputElement.type === 'checkbox'){
             dataToSave[key] = inputElement.checked;
+        } else if (inputElement.type === 'file') {
+            // Para arquivos, armazenamos apenas o nome para esta demo
+            // Em uma implementação real, você usaria Firebase Storage
+            dataToSave[key] = inputElement.files.length > 0 ? inputElement.files[0].name : '';
         } else {
-             dataToSave[key] = value;
+            dataToSave[key] = value;
         }
     }
+    
+    // Adiciona timestamp
+    dataToSave['created_at'] = new Date().toISOString();
     
     const dataRef = ref(db, `data/${path}`);
     push(dataRef, dataToSave)
@@ -169,15 +354,26 @@ function saveFormData(path) {
                 icon: 'success',
                 title: 'Dados Guardados!',
                 text: 'O seu registo foi guardado com sucesso na base de dados.',
+                customClass: {
+                    popup: 'shadow-xl rounded-xl'
+                }
             });
             form.reset();
+            
+            // Resetar nomes de arquivos
+            document.querySelectorAll('[id$="-filename"]').forEach(el => {
+                el.textContent = 'Nenhum arquivo selecionado';
+            });
         })
         .catch(error => {
             console.error("Erro ao guardar dados: ", error);
-             Swal.fire({
+            Swal.fire({
                 icon: 'error',
                 title: 'Erro ao Guardar',
-                text: 'Ocorreu um problema ao tentar guardar os dados.',
+                text: 'Ocorreu um problema ao tentar guardar os dados: ' + error.message,
+                customClass: {
+                    popup: 'shadow-xl rounded-xl'
+                }
             });
         });
 }

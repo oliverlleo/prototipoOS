@@ -3,21 +3,22 @@ body {
     background-color: #f8fafc;
 }
 
+/* Loading Animation */
 .loading-overlay {
     position: fixed;
     inset: 0;
-    background-color: rgba(255, 255, 255, 0.8);
+    background-color: rgba(255, 255, 255, 0.9);
     display: flex;
     justify-content: center;
     align-items: center;
     z-index: 100;
-    backdrop-filter: blur(4px);
+    backdrop-filter: blur(8px);
 }
 
 .spinner {
-    width: 56px;
-    height: 56px;
-    border: 5px solid #e0e7ff;
+    width: 40px;
+    height: 40px;
+    border: 4px solid #e0e7ff;
     border-bottom-color: #6366f1;
     border-radius: 50%;
     display: inline-block;
@@ -25,34 +26,238 @@ body {
     animation: rotation 1s linear infinite;
 }
 
+@media (min-width: 640px) {
+    .spinner {
+        width: 56px;
+        height: 56px;
+        border-width: 5px;
+    }
+}
+
 @keyframes rotation {
     0% { transform: rotate(0deg); }
     100% { transform: rotate(360deg); }
 }
 
+/* Drag and Drop Styles */
 .sortable-ghost {
-    opacity: 0.4;
-    background-color: #c7d2fe;
-    border: 2px dashed #6366f1;
+    opacity: 0.5;
+    background-color: #e0e7ff !important;
+    border: 2px dashed #6366f1 !important;
+    box-shadow: none !important;
 }
 
-.sortable-drag { opacity: 1 !important; }
+.sortable-drag { 
+    opacity: 1 !important; 
+    cursor: grabbing;
+    transform: scale(1.02);
+    z-index: 10;
+}
+
+.sortable-chosen {
+    background-color: #f5f5ff;
+}
 
 .toolbox-item {
     cursor: grab;
     transition: all 0.2s ease-in-out;
+    touch-action: none; /* Melhora o comportamento de toque em dispositivos móveis */
 }
 
 .toolbox-item:hover {
-    background-color: #e0e7ff;
-    color: #4338ca;
-    transform: scale(1.05);
+    transform: translateY(-2px);
 }
 
-.toolbox-item[data-field-type="relationship"] {
+.toolbox-item:active {
+    cursor: grabbing;
+}
+
+.toolbox-item[data-field-type="relationship"],
+.toolbox-item[data-field-type="sub-entity"] {
     background-color: #eef2ff;
-    border-color: #a5b4fc;
+    border-color: #c7d2fe;
 }
 
-.no-scrollbar::-webkit-scrollbar { display: none; }
-.no-scrollbar { -ms-overflow-style: none; scrollbar-width: none; }
+/* Animation for new elements */
+@keyframes highlight-pulse {
+    0% { box-shadow: 0 0 0 0 rgba(99, 102, 241, 0.4); }
+    70% { box-shadow: 0 0 0 10px rgba(99, 102, 241, 0); }
+    100% { box-shadow: 0 0 0 0 rgba(99, 102, 241, 0); }
+}
+
+.animate-pulse {
+    animation: highlight-pulse 2s 1;
+}
+
+/* Animação para dicas */
+@keyframes tip-fade-in {
+    0% { opacity: 0; transform: translateY(-10px); }
+    100% { opacity: 1; transform: translateY(0); }
+}
+
+#welcome-tip, #quick-tip {
+    animation: tip-fade-in 0.5s ease-out;
+}
+
+.close-tip-btn {
+    transition: all 0.2s ease;
+}
+
+.close-tip-btn:hover {
+    transform: scale(1.1);
+}
+
+/* Empty States */
+#empty-form-state:only-child {
+    display: flex;
+}
+
+#form-builder-dropzone:empty + #empty-form-state {
+    display: flex;
+}
+
+#module-container:empty + #empty-state {
+    display: flex;
+}
+
+/* Improved Scrollbars */
+.no-scrollbar::-webkit-scrollbar { 
+    width: 4px;
+    height: 4px;
+}
+
+@media (min-width: 640px) {
+    .no-scrollbar::-webkit-scrollbar { 
+        width: 6px;
+        height: 6px;
+    }
+}
+
+.no-scrollbar::-webkit-scrollbar-track {
+    background: transparent;
+}
+
+.no-scrollbar::-webkit-scrollbar-thumb {
+    background-color: rgba(203, 213, 225, 0.5);
+    border-radius: 3px;
+}
+
+.no-scrollbar::-webkit-scrollbar-thumb:hover {
+    background-color: rgba(148, 163, 184, 0.7);
+}
+
+/* Modal Animations */
+#entity-builder-modal .bg-white {
+    transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+#entity-builder-modal.hidden .bg-white {
+    transform: scale(0.95);
+    opacity: 0;
+}
+
+/* Transitions for hover states */
+.module-quadro,
+.entity-card,
+.dropped-entity-card,
+.form-field-card,
+button {
+    transition: all 0.2s ease-in-out;
+}
+
+/* Custom effects */
+.shadow-highlight {
+    box-shadow: 0 0 0 2px rgba(99, 102, 241, 0.3);
+}
+
+/* Button hover effects */
+button:active {
+    transform: translateY(1px);
+}
+
+/* Entity cards with no-results states */
+.entities-dropzone:empty::after {
+    content: 'Sem entidades';
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    height: 80px;
+    width: 100%;
+    color: #94a3b8;
+    font-size: 0.75rem;
+    font-style: italic;
+    border: 2px dashed #e2e8f0;
+    border-radius: 0.5rem;
+    margin-top: 0.5rem;
+}
+
+@media (min-width: 640px) {
+    .entities-dropzone:empty::after {
+        content: 'Sem entidades neste módulo';
+        height: 100px;
+        font-size: 0.875rem;
+    }
+}
+
+#form-builder-dropzone:empty::after {
+    content: 'Arraste campos aqui';
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    height: 80px;
+    width: 100%;
+    color: #94a3b8;
+    font-size: 0.75rem;
+    font-style: italic;
+}
+
+@media (min-width: 640px) {
+    #form-builder-dropzone:empty::after {
+        content: 'Arraste campos aqui para criar o formulário';
+        height: 100px;
+        font-size: 0.875rem;
+    }
+}
+
+/* Mobile Sidebar Toggle */
+#desktop-sidebar {
+    transition: transform 0.3s ease-in-out;
+}
+
+#desktop-sidebar.open {
+    transform: translateX(0);
+}
+
+/* Modal sidebar toggle */
+#modal-sidebar-container {
+    transition: height 0.3s ease-in-out;
+}
+
+#modal-sidebar-container.open #modal-sidebar-content {
+    display: block;
+}
+
+/* Limitação de texto em elementos móveis */
+.module-title, .entity-name {
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+    max-width: 150px;
+}
+
+@media (min-width: 640px) {
+    .module-title, .entity-name {
+        max-width: 200px;
+    }
+}
+
+/* Breadcrumb responsivo */
+#modal-breadcrumb {
+    max-width: 180px;
+}
+
+@media (min-width: 640px) {
+    #modal-breadcrumb {
+        max-width: none;
+    }
+}
